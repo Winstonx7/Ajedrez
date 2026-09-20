@@ -1,0 +1,1722 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Entrenador de ajedrez con IA: juega, importa una PGN o trae tus partidas de Chess.com. Cada jugada, tuya y del rival, se califica al instante con la mejor alternativa y el motivo.">
+<title>Gran Maestro de Bolsillo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+<style>
+  :root{
+    --bg:#151310;
+    --panel:#1f1c16;
+    --panel-2:#262218;
+    --line:#3a3327;
+    --ivory:#e9e0c8;
+    --walnut:#7a6748;
+    --text:#ede6d6;
+    --muted:#a7987b;
+    --brilliant:#c9a34e;
+    --excellent:#7fb56a;
+    --good:#8fbf9a;
+    --inaccuracy:#dba24d;
+    --mistake:#c9743f;
+    --blunder:#b04a3c;
+    --book:#7a9cc0;
+    --white-eval:#e9e0c8;
+    --black-eval:#2b2620;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:radial-gradient(1200px 800px at 20% -10%, #221d16 0%, var(--bg) 55%);
+    color:var(--text);
+    font-family:'IBM Plex Sans', sans-serif;
+    padding:28px 20px 60px;
+    min-height:100vh;
+  }
+  .wrap{max-width:1180px;margin:0 auto;}
+  header{margin-bottom:22px;}
+  h1{
+    font-family:'Fraunces', serif;
+    font-weight:700;
+    font-size:clamp(28px,4vw,42px);
+    margin:0 0 6px;
+    letter-spacing:-0.01em;
+  }
+  header p{margin:0;color:var(--muted);font-size:16px;max-width:600px;line-height:1.6;}
+
+  .howto{
+    margin-top:16px;
+    border:1px solid var(--line);
+    background:var(--panel);
+    border-radius:6px;
+    max-width:720px;
+  }
+  .howto summary{
+    cursor:pointer;
+    padding:12px 16px;
+    font-size:13.5px;
+    font-weight:500;
+    color:var(--ivory);
+    list-style:none;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .howto summary::-webkit-details-marker{display:none;}
+  .howto summary::before{content:'▸';color:var(--muted);font-size:11px;}
+  .howto[open] summary::before{content:'▾';}
+  .howto-body{
+    padding:2px 16px 16px;
+    font-size:13px;
+    color:var(--muted);
+    line-height:1.6;
+  }
+  .howto-body p{margin:0 0 10px;}
+  .howto-body p:last-child{margin-bottom:0;}
+  .howto-body b{color:var(--text);}
+  .howto-body ul{margin:6px 0 12px;padding-left:18px;}
+  .howto-body li{margin-bottom:4px;}
+  .layout{
+    display:grid;
+    grid-template-columns:minmax(340px,600px) 1fr;
+    gap:22px;
+    margin-top:24px;
+    align-items:start;
+  }
+  @media (max-width:880px){
+    .layout{grid-template-columns:1fr;}
+  }
+  .card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:18px;
+  }
+  .card + .card{margin-top:16px;}
+  .card h2{
+    font-family:'Fraunces', serif;
+    font-size:16px;
+    margin:0 0 12px;
+    font-weight:600;
+    color:var(--ivory);
+  }
+  /* Board */
+  .board-shell{display:flex;flex-direction:column;align-items:center;gap:14px;}
+  #board{
+    display:grid;
+    grid-template-columns:repeat(8,1fr);
+    grid-template-rows:repeat(8,1fr);
+    width:min(560px,92vw);
+    aspect-ratio:1/1;
+    border:4px solid #4a3d29;
+    border-radius:4px;
+    overflow:hidden;
+    box-shadow:0 14px 36px rgba(0,0,0,.5);
+  }
+  .sq{
+    position:relative;
+    display:flex;align-items:center;justify-content:center;
+    font-size:clamp(30px,6.2vw,52px);
+    cursor:pointer;
+    user-select:none;
+    transition:filter .1s;
+  }
+  .sq.light{background:var(--ivory);}
+  .sq.dark{background:var(--walnut);}
+  .sq.selected{outline:3px solid var(--brilliant) inset;}
+  .sq.legal::after{
+    content:'';
+    position:absolute;width:26%;height:26%;border-radius:50%;
+    background:rgba(60,50,30,.45);
+  }
+  .sq.legal.has-piece::after{
+    width:100%;height:100%;border-radius:0;
+    background:rgba(176,74,60,.35);
+  }
+  .sq.lastmove{box-shadow:inset 0 0 0 3px rgba(201,163,78,.75);}
+  .piece-w{
+    color:#fdfbf4;
+    text-shadow:-1px -1px 0 #241f18, 1px -1px 0 #241f18, -1px 1px 0 #241f18, 1px 1px 0 #241f18, 0 2px 4px rgba(0,0,0,.55);
+  }
+  .piece-b{
+    color:#191510;
+    text-shadow:-1px -1px 0 #f4ecd8, 1px -1px 0 #f4ecd8, -1px 1px 0 #f4ecd8, 1px 1px 0 #f4ecd8, 0 2px 3px rgba(0,0,0,.35);
+  }
+  .coord{position:absolute;font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;line-height:1;pointer-events:none;opacity:.85;}
+  .coord-rank{top:3px;left:4px;}
+  .coord-file{bottom:2px;right:4px;}
+  .sq.light .coord{color:var(--walnut);}
+  .sq.dark .coord{color:var(--ivory);}
+  .controls{display:flex;gap:8px;}
+  button{
+    font-family:'IBM Plex Sans', sans-serif;
+    font-size:13px;
+    font-weight:500;
+    background:var(--panel-2);
+    color:var(--text);
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:9px 14px;
+    cursor:pointer;
+    transition:background .15s, border-color .15s;
+  }
+  button:hover{background:#312b1f;border-color:#4a3d27;}
+  button:disabled{opacity:.35;cursor:not-allowed;}
+  button.primary{background:var(--brilliant);color:#241f18;border-color:var(--brilliant);font-weight:600;}
+  button.primary:hover{background:#d8b45e;}
+  .nav-row{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
+  textarea{
+    width:100%;min-height:76px;
+    background:#100e0a;color:var(--text);
+    border:1px solid var(--line);border-radius:6px;
+    padding:10px;font-family:'IBM Plex Mono',monospace;font-size:12.5px;
+    resize:vertical;
+  }
+  input[type=text]{
+    width:100%;background:#100e0a;color:var(--text);
+    border:1px solid var(--line);border-radius:6px;
+    padding:9px 10px;font-size:13.5px;
+  }
+  .row{display:flex;gap:8px;margin-top:8px;}
+  .row > *{flex:1;}
+  .import-status{font-size:12.5px;color:var(--muted);margin-top:8px;line-height:1.5;}
+  .cc-games{margin-top:10px;display:flex;flex-direction:column;gap:6px;max-height:180px;overflow:auto;}
+  .cc-game-item{
+    text-align:left;background:var(--panel-2);border:1px solid var(--line);
+    border-radius:6px;padding:8px 10px;font-size:12.5px;cursor:pointer;
+  }
+  .cc-game-item:hover{border-color:var(--brilliant);}
+
+  /* Eval bar */
+  .evalbar-track{
+    width:100%;height:22px;border-radius:5px;overflow:hidden;
+    background:var(--black-eval);display:flex;border:1px solid var(--line);
+  }
+  .evalbar-white{background:var(--white-eval);height:100%;transition:width .25s ease;}
+  .eval-label{
+    display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;
+    font-size:13px;margin-top:8px;color:var(--muted);
+  }
+  .eval-label b{color:var(--text);font-size:15px;}
+  .score-divider{height:1px;background:var(--line);margin:16px 0;}
+
+  /* Puntuación de precisión */
+  .acc-row{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+  .acc-row:last-child{margin-bottom:0;}
+  .acc-row span{width:76px;font-size:13px;color:var(--muted);flex-shrink:0;}
+  .acc-track{flex:1;height:10px;border-radius:5px;background:var(--panel-2);overflow:hidden;}
+  .acc-fill{height:100%;background:var(--excellent);transition:width .3s ease;}
+  .acc-fill.dark{background:var(--book);}
+  .acc-row b{width:64px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:13px;flex-shrink:0;}
+
+  /* Move list */
+  .movelist{
+    max-height:200px;overflow:auto;
+    display:flex;flex-wrap:wrap;gap:6px;
+    padding:4px 0;
+  }
+  .movechip{
+    font-family:'IBM Plex Mono',monospace;font-size:12.5px;
+    padding:5px 9px;border-radius:5px;border:1px solid var(--line);
+    background:var(--panel-2);cursor:pointer;color:var(--text);
+  }
+  .movechip.active{border-color:var(--brilliant);background:#3a3120;}
+  .movechip.tag-brilliant{border-left:3px solid var(--brilliant);}
+  .movechip.tag-excelente{border-left:3px solid var(--excellent);}
+  .movechip.tag-buena{border-left:3px solid var(--good);}
+  .movechip.tag-inexactitud{border-left:3px solid var(--inaccuracy);}
+  .movechip.tag-error{border-left:3px solid var(--mistake);}
+  .movechip.tag-pifia{border-left:3px solid var(--blunder);}
+  .movechip.tag-libro{border-left:3px solid var(--book);}
+  .empty-hint{color:var(--muted);font-size:13px;line-height:1.6;}
+
+  /* Classification panel */
+  .class-badge{
+    display:inline-flex;align-items:center;gap:8px;
+    font-family:'Fraunces',serif;font-weight:700;font-size:20px;
+    padding:8px 14px;border-radius:6px;margin-bottom:12px;
+  }
+  .class-badge.brillante{background:rgba(201,163,78,.16);color:var(--brilliant);}
+  .class-badge.excelente{background:rgba(127,181,106,.16);color:var(--excellent);}
+  .class-badge.buena{background:rgba(143,191,154,.16);color:var(--good);}
+  .class-badge.inexactitud{background:rgba(219,162,77,.16);color:var(--inaccuracy);}
+  .class-badge.error{background:rgba(201,116,63,.16);color:var(--mistake);}
+  .class-badge.pifia{background:rgba(176,74,60,.18);color:var(--blunder);}
+  .class-badge.libro{background:rgba(122,156,192,.16);color:var(--book);}
+  .movemeta{color:var(--muted);font-size:13px;margin-bottom:14px;}
+  .movemeta b{color:var(--text);}
+  .explain-box{
+    background:var(--panel-2);border:1px solid var(--line);border-radius:6px;
+    padding:12px 14px;font-size:13.5px;line-height:1.6;margin-top:10px;color:var(--text);
+    display:none;
+  }
+  .best-box{
+    background:rgba(201,163,78,.08);border:1px solid rgba(201,163,78,.35);border-radius:6px;
+    padding:12px 14px;font-size:13.5px;line-height:1.6;margin-top:10px;display:none;
+  }
+  .btnrow{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;}
+
+  /* Pestañas de importación */
+  .tabbar{display:flex;gap:18px;border-bottom:1px solid var(--line);margin-bottom:16px;}
+  .tab{
+    background:none;border:none;border-radius:0;
+    padding:0 0 10px;margin-bottom:-1px;
+    border-bottom:2px solid transparent;
+    color:var(--muted);font-size:13.5px;font-weight:500;
+    cursor:pointer;
+  }
+  .tab:hover{color:var(--text);}
+  .tab.active{color:var(--brilliant);border-bottom-color:var(--brilliant);}
+  .tabpanel[hidden]{display:none;}
+  .tab-hint{margin:0 0 10px;color:var(--muted);font-size:12.5px;line-height:1.5;}
+  .tab-hint b{color:var(--text);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Gran Maestro de Bolsillo</h1>
+    <p>Juega una partida o tráela de Chess.com. Cada jugada — tuya y del rival — queda calificada al instante, con la mejor alternativa y el motivo cuando algo sale mal.</p>
+    <details class="howto">
+      <summary>Cómo funciona el análisis</summary>
+      <div class="howto-body">
+        <p><b>El motor.</b> Es propio, no Stockfish: tablero 0x88 con generador de jugadas verificado contra pruebas perft oficiales (enroques, captura al paso, coronaciones, clavadas). Evalúa material, tablas posicionales, estructura de peones, pareja de alfiles, torres en columnas abiertas, escudo del rey y movilidad por pieza. Busca con poda alfa-beta, ordena las capturas primero, extiende los jaques hasta el final de la secuencia forzada, y resuelve toda captura pendiente antes de puntuar (así no confunde un cambio de piezas normal con perder material gratis). Razona con la misma lógica que un motor real; solo que Stockfish busca mucho más hondo.</p>
+        <p><b>Cómo se califica cada jugada.</b> Se compara contra la mejor jugada disponible en esa misma posición, midiendo cuánto cae tu probabilidad de ganar — no los peones perdidos, porque perder un peón con dama de ventaja casi no importa, y perderlo en una posición pareja lo cambia todo:</p>
+        <ul>
+          <li>La mejor jugada, o hasta 2% menos → <b>Excelente</b></li>
+          <li>2–5% → <b>Buena</b></li>
+          <li>5–10% → <b>Inexactitud</b></li>
+          <li>10–20% → <b>Error</b></li>
+          <li>Más de 20% → <b>Pifia</b></li>
+          <li>Sacrificio que no baja la probabilidad → <b>Brillante</b></li>
+          <li>Teoría de apertura conocida → <b>De libro</b></li>
+        </ul>
+        <p><b>El marcador de precisión (0–100).</b> No es un promedio simple: eso diluiría un par de errores reales entre docenas de jugadas normales. Combina una media ponderada — más peso a los momentos críticos de la partida — con una media armónica, que castiga fuerte cualquier jugada realmente mala. Es el método público que describe Lichess. Se le suma una corrección porque nuestro motor busca menos hondo que Stockfish y por eso tiende a perdonar errores reales.</p>
+        <p><b>Chess.com.</b> Trae partidas ya finalizadas por nombre de usuario. No existe forma pública de observar una partida ajena en vivo; en cuanto termina, ya la puedes traer aquí.</p>
+        <p><b>Sobre la velocidad.</b> Analizar una partida completa se hace en segundo plano y por lotes — verás el progreso en pantalla en vez de que la página se sienta trabada.</p>
+      </div>
+    </details>
+  </header>
+
+  <div class="layout">
+    <!-- LEFT: board + import -->
+    <div>
+      <div class="card board-shell">
+        <div id="board"></div>
+        <div class="nav-row">
+          <button id="btnStart" title="Inicio">⏮</button>
+          <button id="btnPrev" title="Atrás">◀</button>
+          <button id="btnNext" title="Adelante">▶</button>
+          <button id="btnEnd" title="Final">⏭</button>
+          <button id="btnReset" title="Empezar de nuevo">Empezar de nuevo</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Cargar una partida</h2>
+        <div class="tabbar" role="tablist">
+          <button class="tab active" data-tab="pgn" type="button">Pegar PGN</button>
+          <button class="tab" data-tab="cc" type="button">Usuario de Chess.com</button>
+          <button class="tab" data-tab="link" type="button">Enlace</button>
+        </div>
+
+        <div class="tabpanel" data-panel="pgn">
+          <textarea id="pgnInput" placeholder="Pega aquí una PGN (por ejemplo, copiada desde Chess.com con 'Compartir → PGN')"></textarea>
+          <div class="row">
+            <button id="btnLoadPgn">Cargar PGN</button>
+          </div>
+          <div class="import-status" id="pgnStatus"></div>
+        </div>
+
+        <div class="tabpanel" data-panel="cc" hidden>
+          <input type="text" id="ccUsername" placeholder="usuario de Chess.com">
+          <div class="row">
+            <button id="btnCcFetch">Traer últimas partidas</button>
+          </div>
+          <div class="import-status" id="ccStatus"></div>
+          <div class="cc-games" id="ccGames"></div>
+        </div>
+
+        <div class="tabpanel" data-panel="link" hidden>
+          <p class="tab-hint">Pega el enlace de una partida de <b>Lichess</b> (funciona directo) o de <b>Chess.com</b> (intento automático; si falla, usa la pestaña de usuario o pega la PGN a mano).</p>
+          <input type="text" id="gameLinkInput" placeholder="https://lichess.org/abcd1234 o https://www.chess.com/game/live/123456789">
+          <div class="row">
+            <button id="btnLoadLink">Analizar desde el enlace</button>
+          </div>
+          <div class="import-status" id="linkStatus"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: eval, movelist, classification -->
+    <div>
+      <div class="card">
+        <h2>Marcador</h2>
+        <div class="evalbar-track"><div class="evalbar-white" id="evalFill" style="width:50%"></div></div>
+        <div class="eval-label"><span>Negras</span><b id="evalNum">0.00</b><span>Blancas</span></div>
+        <div class="score-divider"></div>
+        <div id="accuracyPanel"><div class="empty-hint">Juega o carga una partida para ver el marcador.</div></div>
+      </div>
+
+      <div class="card">
+        <h2>Historial de jugadas</h2>
+        <div class="movelist" id="moveList">
+          <div class="empty-hint">Aún no hay jugadas. Mueve una pieza o carga una partida arriba.</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Jugada en revisión</h2>
+        <div id="classPanelEmpty" class="empty-hint">Elige una jugada del historial, o juega una, para ver su análisis.</div>
+        <div id="classPanel" style="display:none;">
+          <div class="class-badge" id="classBadge">👑 —</div>
+          <div class="movemeta" id="classMeta"></div>
+          <div class="btnrow">
+            <button id="btnBest">¿Cuál era la mejor jugada?</button>
+            <button id="btnWhy">¿Por qué fue buena o mala?</button>
+          </div>
+          <div class="best-box" id="bestBox"></div>
+          <div class="explain-box" id="explainBox"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- Motor propio (tablero 0x88) ----------------
+     chess.js es excelente para la interfaz, pero generar jugadas con él cuesta
+     ~0.85 ms por llamada. Un motor necesita cientos de miles de esas operaciones,
+     así que buscar con chess.js hacía imposible analizar con profundidad real.
+     Este motor usa representación 0x88 con make/unmake propios: las mismas reglas
+     (enroque, al paso, coronación, jaques), pero cientos de veces más rápido.
+     chess.js se sigue usando para el tablero, la PGN y la notación. */
+
+  const VALUE = {p:100,n:320,b:330,r:500,q:900,k:0};
+  const MOBILITY_W = {p:0,n:4,b:4,r:2,q:1,k:0};
+  const NAME_ES = {p:'peón',n:'caballo',b:'alfil',r:'torre',q:'dama',k:'rey'};
+
+  // Códigos de pieza: tipo 1..6 (P,N,B,R,Q,K); las negras suman 8.
+  const P=1,N=2,B=3,R=4,Q=5,K=6;
+  const VAL_BY_TYPE = [0,100,320,330,500,900,0];
+  const MOB_BY_TYPE = [0,0,4,4,2,1,0];
+  const TYPE_CHAR = [null,'p','n','b','r','q','k'];
+  function typeOf(pc){ return pc & 7; }
+  function colorOf(pc){ return pc >= 9 ? 1 : 0; } // 0 = blancas, 1 = negras
+
+  const KNIGHT_OFF = [33,31,18,14,-33,-31,-18,-14];
+  const BISHOP_OFF = [17,15,-17,-15];
+  const ROOK_OFF   = [16,-16,1,-1];
+  const KING_OFF   = [17,16,15,1,-1,-17,-16,-15];
+  const SLIDE_OFF  = [null,null,null,BISHOP_OFF,ROOK_OFF,KING_OFF,null];
+
+  const PST = {
+    p:[ 0,0,0,0,0,0,0,0,
+        50,50,50,50,50,50,50,50,
+        10,10,20,30,30,20,10,10,
+        5,5,10,25,25,10,5,5,
+        0,0,0,20,20,0,0,0,
+        5,-5,-10,0,0,-10,-5,5,
+        5,10,10,-20,-20,10,10,5,
+        0,0,0,0,0,0,0,0],
+    n:[ -50,-40,-30,-30,-30,-30,-40,-50,
+        -40,-20,0,0,0,0,-20,-40,
+        -30,0,10,15,15,10,0,-30,
+        -30,5,15,20,20,15,5,-30,
+        -30,0,15,20,20,15,0,-30,
+        -30,5,10,15,15,10,5,-30,
+        -40,-20,0,5,5,0,-20,-40,
+        -50,-40,-30,-30,-30,-30,-40,-50],
+    b:[ -20,-10,-10,-10,-10,-10,-10,-20,
+        -10,0,0,0,0,0,0,-10,
+        -10,0,5,10,10,5,0,-10,
+        -10,5,5,10,10,5,5,-10,
+        -10,0,10,10,10,10,0,-10,
+        -10,10,10,10,10,10,10,-10,
+        -10,5,0,0,0,0,5,-10,
+        -20,-10,-10,-10,-10,-10,-10,-20],
+    r:[ 0,0,0,0,0,0,0,0,
+        5,10,10,10,10,10,10,5,
+        -5,0,0,0,0,0,0,-5,
+        -5,0,0,0,0,0,0,-5,
+        -5,0,0,0,0,0,0,-5,
+        -5,0,0,0,0,0,0,-5,
+        -5,0,0,0,0,0,0,-5,
+        0,0,0,5,5,0,0,0],
+    q:[ -20,-10,-10,-5,-5,-10,-10,-20,
+        -10,0,0,0,0,0,0,-10,
+        -10,0,5,5,5,5,0,-10,
+        -5,0,5,5,5,5,0,-5,
+        0,0,5,5,5,5,0,-5,
+        -10,5,5,5,5,5,0,-10,
+        -10,0,5,0,0,0,0,-10,
+        -20,-10,-10,-5,-5,-10,-10,-20],
+    k:[ -30,-40,-40,-50,-50,-40,-40,-30,
+        -30,-40,-40,-50,-50,-40,-40,-30,
+        -30,-40,-40,-50,-50,-40,-40,-30,
+        -30,-40,-40,-50,-50,-40,-40,-30,
+        -20,-30,-30,-40,-40,-30,-30,-20,
+        -10,-20,-20,-20,-20,-20,-20,-10,
+        20,20,0,0,0,0,20,20,
+        20,30,10,0,0,10,30,20],
+    // Rey en el final: debe activarse hacia el centro, al revés que en el medio juego.
+    kEnd:[ -50,-40,-30,-20,-20,-30,-40,-50,
+        -30,-20,-10,0,0,-10,-20,-30,
+        -30,-10,20,30,30,20,-10,-30,
+        -30,-10,30,40,40,30,-10,-30,
+        -30,-10,30,40,40,30,-10,-30,
+        -30,-10,20,30,30,20,-10,-30,
+        -30,-30,0,0,0,0,-30,-30,
+        -50,-30,-30,-30,-30,-30,-30,-50]
+  };
+  // PST indexado por tipo, en orden [.,P,N,B,R,Q,K]
+  const PST_BY_TYPE = [null, PST.p, PST.n, PST.b, PST.r, PST.q, PST.k];
+
+  function sqFromAlg(s){ return (s.charCodeAt(1)-49)*16 + (s.charCodeAt(0)-97); }
+  function algFromSq(sq){ return String.fromCharCode(97+(sq&15)) + String.fromCharCode(49+(sq>>4)); }
+
+  /* ---- Estado de la posición ---- */
+  function parseFen(fen){
+    const board = new Int8Array(128);
+    const parts = fen.split(/\s+/);
+    let rank = 7, file = 0;
+    for(const ch of parts[0]){
+      if(ch==='/'){ rank--; file=0; continue; }
+      if(ch>='1' && ch<='8'){ file += ch.charCodeAt(0)-48; continue; }
+      const lower = ch.toLowerCase();
+      const t = lower==='p'?P: lower==='n'?N: lower==='b'?B: lower==='r'?R: lower==='q'?Q: K;
+      const pc = (ch===lower) ? (t+8) : t;
+      board[rank*16+file] = pc;
+      file++;
+    }
+    let castling = 0;
+    if(parts[2] && parts[2]!=='-'){
+      if(parts[2].indexOf('K')!==-1) castling|=1;
+      if(parts[2].indexOf('Q')!==-1) castling|=2;
+      if(parts[2].indexOf('k')!==-1) castling|=4;
+      if(parts[2].indexOf('q')!==-1) castling|=8;
+    }
+    const st = {
+      board,
+      turn: parts[1]==='b' ? 1 : 0,
+      castling,
+      ep: (parts[3] && parts[3]!=='-') ? sqFromAlg(parts[3]) : -1,
+      kings: [-1,-1],
+      stack: []
+    };
+    for(let sq=0; sq<128; sq++){
+      if(sq & 0x88) continue;
+      const pc = board[sq];
+      if(pc && typeOf(pc)===K) st.kings[colorOf(pc)] = sq;
+    }
+    return st;
+  }
+
+  function isAttacked(st, sq, byColor){
+    const bd = st.board;
+    // Peones
+    if(byColor===0){
+      const a=sq-17, b=sq-15;
+      if(!(a & 0x88) && bd[a]===P) return true;
+      if(!(b & 0x88) && bd[b]===P) return true;
+    } else {
+      const a=sq+17, b=sq+15;
+      if(!(a & 0x88) && bd[a]===(P+8)) return true;
+      if(!(b & 0x88) && bd[b]===(P+8)) return true;
+    }
+    // Caballos
+    for(let i=0;i<8;i++){
+      const t = sq + KNIGHT_OFF[i];
+      if(t & 0x88) continue;
+      const pc = bd[t];
+      if(pc && typeOf(pc)===N && colorOf(pc)===byColor) return true;
+    }
+    // Rey
+    for(let i=0;i<8;i++){
+      const t = sq + KING_OFF[i];
+      if(t & 0x88) continue;
+      const pc = bd[t];
+      if(pc && typeOf(pc)===K && colorOf(pc)===byColor) return true;
+    }
+    // Deslizantes: diagonales (alfil/dama) y rectas (torre/dama)
+    for(let i=0;i<4;i++){
+      const off = BISHOP_OFF[i];
+      let t = sq + off;
+      while(!(t & 0x88)){
+        const pc = bd[t];
+        if(pc){
+          if(colorOf(pc)===byColor){ const ty=typeOf(pc); if(ty===B||ty===Q) return true; }
+          break;
+        }
+        t += off;
+      }
+    }
+    for(let i=0;i<4;i++){
+      const off = ROOK_OFF[i];
+      let t = sq + off;
+      while(!(t & 0x88)){
+        const pc = bd[t];
+        if(pc){
+          if(colorOf(pc)===byColor){ const ty=typeOf(pc); if(ty===R||ty===Q) return true; }
+          break;
+        }
+        t += off;
+      }
+    }
+    return false;
+  }
+
+  function inCheck(st, color){ return isAttacked(st, st.kings[color], color^1); }
+
+  // Genera jugadas pseudo-legales; la legalidad se comprueba al ejecutarlas.
+  function genMoves(st, capturesOnly){
+    const bd = st.board, us = st.turn, them = us^1;
+    const out = [];
+    for(let sq=0; sq<128; sq++){
+      if(sq & 0x88){ sq += 7; continue; }
+      const pc = bd[sq];
+      if(!pc || colorOf(pc)!==us) continue;
+      const t = typeOf(pc);
+
+      if(t===P){
+        const dir = us===0 ? 16 : -16;
+        const startRank = us===0 ? 1 : 6;
+        const promoRank = us===0 ? 7 : 0;
+        // Capturas
+        for(const dc of [dir-1, dir+1]){
+          const to = sq + dc;
+          if(to & 0x88) continue;
+          const tp = bd[to];
+          if(tp && colorOf(tp)===them){
+            if((to>>4)===promoRank){
+              for(const pr of [Q,R,B,N]) out.push({from:sq,to,piece:P,captured:typeOf(tp),promo:pr,ep:false,castle:0});
+            } else out.push({from:sq,to,piece:P,captured:typeOf(tp),promo:0,ep:false,castle:0});
+          } else if(!tp && to===st.ep){
+            out.push({from:sq,to,piece:P,captured:P,promo:0,ep:true,castle:0});
+          }
+        }
+        if(capturesOnly) continue;
+        // Avances
+        const one = sq + dir;
+        if(!(one & 0x88) && !bd[one]){
+          if((one>>4)===promoRank){
+            for(const pr of [Q,R,B,N]) out.push({from:sq,to:one,piece:P,captured:0,promo:pr,ep:false,castle:0});
+          } else {
+            out.push({from:sq,to:one,piece:P,captured:0,promo:0,ep:false,castle:0});
+            const two = sq + dir*2;
+            if((sq>>4)===startRank && !bd[two]) out.push({from:sq,to:two,piece:P,captured:0,promo:0,ep:false,castle:0});
+          }
+        }
+        continue;
+      }
+
+      if(t===N || t===K){
+        const offs = t===N ? KNIGHT_OFF : KING_OFF;
+        for(let i=0;i<8;i++){
+          const to = sq + offs[i];
+          if(to & 0x88) continue;
+          const tp = bd[to];
+          if(tp && colorOf(tp)===us) continue;
+          if(capturesOnly && !tp) continue;
+          out.push({from:sq,to,piece:t,captured:tp?typeOf(tp):0,promo:0,ep:false,castle:0});
+        }
+        if(t===K && !capturesOnly){
+          // Enroques: casillas vacías y sin pasar por jaque.
+          if(us===0){
+            if((st.castling&1) && !bd[0x05] && !bd[0x06] && bd[0x07]===R &&
+               !isAttacked(st,0x04,1) && !isAttacked(st,0x05,1) && !isAttacked(st,0x06,1))
+              out.push({from:0x04,to:0x06,piece:K,captured:0,promo:0,ep:false,castle:1});
+            if((st.castling&2) && !bd[0x03] && !bd[0x02] && !bd[0x01] && bd[0x00]===R &&
+               !isAttacked(st,0x04,1) && !isAttacked(st,0x03,1) && !isAttacked(st,0x02,1))
+              out.push({from:0x04,to:0x02,piece:K,captured:0,promo:0,ep:false,castle:2});
+          } else {
+            if((st.castling&4) && !bd[0x75] && !bd[0x76] && bd[0x77]===(R+8) &&
+               !isAttacked(st,0x74,0) && !isAttacked(st,0x75,0) && !isAttacked(st,0x76,0))
+              out.push({from:0x74,to:0x76,piece:K,captured:0,promo:0,ep:false,castle:1});
+            if((st.castling&8) && !bd[0x73] && !bd[0x72] && !bd[0x71] && bd[0x70]===(R+8) &&
+               !isAttacked(st,0x74,0) && !isAttacked(st,0x73,0) && !isAttacked(st,0x72,0))
+              out.push({from:0x74,to:0x72,piece:K,captured:0,promo:0,ep:false,castle:2});
+          }
+        }
+        continue;
+      }
+
+      // Deslizantes: alfil, torre, dama
+      const offs = t===Q ? KING_OFF : SLIDE_OFF[t];
+      for(let i=0;i<offs.length;i++){
+        const off = offs[i];
+        let to = sq + off;
+        while(!(to & 0x88)){
+          const tp = bd[to];
+          if(!tp){
+            if(!capturesOnly) out.push({from:sq,to,piece:t,captured:0,promo:0,ep:false,castle:0});
+          } else {
+            if(colorOf(tp)===them) out.push({from:sq,to,piece:t,captured:typeOf(tp),promo:0,ep:false,castle:0});
+            break;
+          }
+          to += off;
+        }
+      }
+    }
+    return out;
+  }
+
+  function engMakeMove(st, m){
+    const bd = st.board, us = st.turn;
+    st.stack.push({castling:st.castling, ep:st.ep, king:st.kings[us], capturedSq:-1, capturedPc:0});
+    const undo = st.stack[st.stack.length-1];
+    const movingPc = bd[m.from];
+
+    if(m.ep){
+      const capSq = us===0 ? m.to-16 : m.to+16;
+      undo.capturedSq = capSq; undo.capturedPc = bd[capSq];
+      bd[capSq] = 0;
+    } else if(m.captured){
+      undo.capturedSq = m.to; undo.capturedPc = bd[m.to];
+    }
+
+    bd[m.to] = m.promo ? (m.promo + (us===1?8:0)) : movingPc;
+    bd[m.from] = 0;
+
+    if(m.piece===K){
+      st.kings[us] = m.to;
+      if(m.castle===1){ // corto
+        const rFrom = us===0?0x07:0x77, rTo = us===0?0x05:0x75;
+        bd[rTo] = bd[rFrom]; bd[rFrom] = 0;
+      } else if(m.castle===2){ // largo
+        const rFrom = us===0?0x00:0x70, rTo = us===0?0x03:0x73;
+        bd[rTo] = bd[rFrom]; bd[rFrom] = 0;
+      }
+      st.castling &= us===0 ? ~3 : ~12;
+    }
+    if(m.piece===R){
+      if(m.from===0x00) st.castling &= ~2;
+      else if(m.from===0x07) st.castling &= ~1;
+      else if(m.from===0x70) st.castling &= ~8;
+      else if(m.from===0x77) st.castling &= ~4;
+    }
+    // Si se captura una torre en su esquina, ese enroque también se pierde.
+    if(m.to===0x00) st.castling &= ~2;
+    else if(m.to===0x07) st.castling &= ~1;
+    else if(m.to===0x70) st.castling &= ~8;
+    else if(m.to===0x77) st.castling &= ~4;
+
+    st.ep = (m.piece===P && Math.abs(m.to-m.from)===32) ? (m.from + (us===0?16:-16)) : -1;
+    st.turn = us^1;
+  }
+
+  function unmakeMove(st, m){
+    const undo = st.stack.pop();
+    const us = st.turn^1;
+    const bd = st.board;
+    st.turn = us;
+    st.castling = undo.castling;
+    st.ep = undo.ep;
+    st.kings[us] = undo.king;
+
+    bd[m.from] = m.promo ? (P + (us===1?8:0)) : bd[m.to];
+    bd[m.to] = 0;
+    if(undo.capturedSq >= 0) bd[undo.capturedSq] = undo.capturedPc;
+
+    if(m.piece===K){
+      if(m.castle===1){
+        const rFrom = us===0?0x07:0x77, rTo = us===0?0x05:0x75;
+        bd[rFrom] = bd[rTo]; bd[rTo] = 0;
+      } else if(m.castle===2){
+        const rFrom = us===0?0x00:0x70, rTo = us===0?0x03:0x73;
+        bd[rFrom] = bd[rTo]; bd[rTo] = 0;
+      }
+    }
+  }
+
+  // Ejecuta solo si la jugada es legal (no deja al propio rey en jaque).
+  function makeIfLegal(st, m){
+    const us = st.turn;
+    engMakeMove(st, m);
+    if(isAttacked(st, st.kings[us], us^1)){ unmakeMove(st, m); return false; }
+    return true;
+  }
+
+  function hasLegalMove(st){
+    const moves = genMoves(st, false);
+    for(const m of moves){
+      if(makeIfLegal(st, m)){ unmakeMove(st, m); return true; }
+    }
+    return false;
+  }
+
+  /* ---- Evaluación ---- */
+  function evaluateState(st){
+    const bd = st.board;
+    let score = 0;
+    let wB=0, bB=0;
+    let nonPawn = 0;
+    const pawnFiles = [[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0]];
+    const pieces = [];
+
+    for(let sq=0; sq<128; sq++){
+      if(sq & 0x88){ sq += 7; continue; }
+      const pc = bd[sq];
+      if(!pc) continue;
+      const t = typeOf(pc), col = colorOf(pc);
+      pieces.push(sq);
+      if(t===P) pawnFiles[col][sq&15]++;
+      else if(t!==K) nonPawn += VAL_BY_TYPE[t];
+      if(t===B){ if(col===0) wB++; else bB++; }
+    }
+
+    const endgame = nonPawn < 1800; // sin damas / pocas piezas: fase final
+    for(const sq of pieces){
+      const pc = bd[sq];
+      const t = typeOf(pc), col = colorOf(pc);
+      const file = sq&15, rank = sq>>4;
+      const rTop = 7-rank;                     // fila desde arriba (0 = fila 8)
+      const pstIdx = col===0 ? (rTop*8+file) : (rank*8+file);
+      const table = (t===K && endgame) ? PST.kEnd : PST_BY_TYPE[t];
+      const sign = col===0 ? 1 : -1;
+      score += sign * (VAL_BY_TYPE[t] + table[pstIdx]);
+      if(MOB_BY_TYPE[t]) score += sign * mobilityAt(st, sq, t, col) * MOB_BY_TYPE[t];
+
+      if(t===P && isPassed(st, sq, col)){
+        const advance = col===0 ? (rank-1) : (6-rank);
+        score += sign * (18 + Math.max(0,advance)*8);
+      }
+      if(t===R){
+        const own = pawnFiles[col][file], opp = pawnFiles[col^1][file];
+        if(own===0 && opp===0) score += sign*16;
+        else if(own===0) score += sign*8;
+      }
+    }
+
+    if(wB>=2) score += 28;
+    if(bB>=2) score -= 28;
+
+    // Escudo de peones del rey (solo relevante fuera del final)
+    if(!endgame){
+      score += pawnShield(st, st.kings[0], 0) * 9;
+      score -= pawnShield(st, st.kings[1], 1) * 9;
+    }
+
+    for(let f=0; f<8; f++){
+      for(let col=0; col<2; col++){
+        const sign = col===0 ? 1 : -1;
+        const n = pawnFiles[col][f];
+        if(n>1) score -= sign*(n-1)*14;
+        const iso = n>0 && (f===0||pawnFiles[col][f-1]===0) && (f===7||pawnFiles[col][f+1]===0);
+        if(iso) score -= sign*12*n;
+      }
+    }
+
+    return score/100;
+  }
+
+  function mobilityAt(st, sq, t, col){
+    const bd = st.board;
+    let count = 0;
+    if(t===N){
+      for(let i=0;i<8;i++){
+        const to = sq + KNIGHT_OFF[i];
+        if(to & 0x88) continue;
+        const tp = bd[to];
+        if(!tp || colorOf(tp)!==col) count++;
+      }
+      return count;
+    }
+    const offs = t===Q ? KING_OFF : SLIDE_OFF[t];
+    if(!offs) return 0;
+    for(let i=0;i<offs.length;i++){
+      const off = offs[i];
+      let to = sq + off;
+      while(!(to & 0x88)){
+        const tp = bd[to];
+        if(!tp){ count++; }
+        else { if(colorOf(tp)!==col) count++; break; }
+        to += off;
+      }
+    }
+    return count;
+  }
+
+  function isPassed(st, sq, col){
+    const bd = st.board;
+    const file = sq&15, rank = sq>>4;
+    const oppPawn = col===0 ? (P+8) : P;
+    const dir = col===0 ? 1 : -1;
+    for(let r = rank+dir; r>=0 && r<=7; r+=dir){
+      for(let f = file-1; f<=file+1; f++){
+        if(f<0||f>7) continue;
+        if(bd[r*16+f]===oppPawn) return false;
+      }
+    }
+    return true;
+  }
+
+  function pawnShield(st, kingSq, col){
+    if(kingSq<0) return 0;
+    const bd = st.board;
+    const file = kingSq&15, rank = kingSq>>4;
+    const r = col===0 ? rank+1 : rank-1;
+    if(r<0||r>7) return 0;
+    const ownPawn = col===0 ? P : (P+8);
+    let shield = 0;
+    for(let f=file-1; f<=file+1; f++){
+      if(f<0||f>7) continue;
+      if(bd[r*16+f]===ownPawn) shield++;
+    }
+    return shield;
+  }
+
+  /* ---- Búsqueda ---- */
+  const MATE = 100;
+
+  function terminalEval(st, ply){
+    // Sin jugadas legales: mate o ahogado.
+    if(inCheck(st, st.turn)) return st.turn===0 ? -(MATE-ply) : (MATE-ply);
+    return 0;
+  }
+
+  function quiesce(st, alpha, beta, budget, qdepth){
+    budget.q++;
+    const maximizing = st.turn===0;
+    if(qdepth<=0 || budget.q > 4000) return evaluateState(st);
+
+    const standPat = evaluateState(st);
+    if(maximizing){
+      if(standPat>=beta) return beta;
+      if(standPat>alpha) alpha=standPat;
+    } else {
+      if(standPat<=alpha) return alpha;
+      if(standPat<beta) beta=standPat;
+    }
+
+    const caps = genMoves(st, true);
+    caps.sort((a,b)=> (VAL_BY_TYPE[b.captured]*10 - VAL_BY_TYPE[b.piece]) -
+                      (VAL_BY_TYPE[a.captured]*10 - VAL_BY_TYPE[a.piece]));
+    for(const m of caps){
+      // Poda delta: si ni capturando eso se alcanza la ventana, no vale explorarlo.
+      const gain = (VAL_BY_TYPE[m.captured] + (m.promo?800:0))/100 + 2.0;
+      if(maximizing){ if(standPat + gain < alpha) continue; }
+      else { if(standPat - gain > beta) continue; }
+      if(!makeIfLegal(st, m)) continue;
+      const score = quiesce(st, alpha, beta, budget, qdepth-1);
+      unmakeMove(st, m);
+      if(maximizing){
+        if(score>=beta) return beta;
+        if(score>alpha) alpha=score;
+      } else {
+        if(score<=alpha) return alpha;
+        if(score<beta) beta=score;
+      }
+    }
+    return maximizing ? alpha : beta;
+  }
+
+  function search(st, depth, alpha, beta, budget, ply){
+    if(depth<=0) return quiesce(st, alpha, beta, budget, 6);
+    budget.count++;
+    if(budget.count > budget.max) return quiesce(st, alpha, beta, budget, 6);
+
+    const maximizing = st.turn===0;
+    const moves = genMoves(st, false);
+    moves.sort((a,b)=> (VAL_BY_TYPE[b.captured]*10 - VAL_BY_TYPE[b.piece]) -
+                       (VAL_BY_TYPE[a.captured]*10 - VAL_BY_TYPE[a.piece]));
+    let any = false;
+    let best = maximizing ? -Infinity : Infinity;
+
+    for(const m of moves){
+      if(!makeIfLegal(st, m)) continue;
+      any = true;
+      // Extensión de jaques: si la jugada da jaque, la respuesta es forzada, así que
+      // la línea se sigue explorando sin gastar profundidad. Es lo que permite ver
+      // sacrificios que terminan en mate forzado en vez de leerlos como material perdido.
+      const ext = (ply < 14 && inCheck(st, st.turn)) ? 1 : 0;
+      const score = search(st, depth-1+ext, alpha, beta, budget, ply+1);
+      unmakeMove(st, m);
+      if(maximizing){
+        if(score>best) best=score;
+        if(best>alpha) alpha=best;
+      } else {
+        if(score<best) best=score;
+        if(best<beta) beta=best;
+      }
+      if(beta<=alpha) break;
+    }
+    if(!any) return terminalEval(st, ply);
+    return best;
+  }
+
+  const NODE_BUDGET = {0:400, 1:1500, 2:6000, 3:20000, 4:60000};
+
+  function engineEval(fen, depth){
+    const st = parseFen(fen);
+    if(!hasLegalMove(st)) return terminalEval(st, 0);
+    const budget = {count:0, q:0, max: NODE_BUDGET[depth] || 60000};
+    return search(st, depth, -Infinity, Infinity, budget, 0);
+  }
+
+  const evalCache = new Map();
+  function cachedEngineEval(fen, depth){
+    const key = depth+'|'+fen;
+    if(evalCache.has(key)) return evalCache.get(key);
+    const v = engineEval(fen, depth);
+    evalCache.set(key, v);
+    return v;
+  }
+  function evalFen(fen){ return evaluateState(parseFen(fen)); }
+
+  // Búsqueda en la raíz: puntúa TODAS las jugadas legales con la misma profundidad
+  // y ventana completa, de modo que las puntuaciones sean comparables entre sí.
+  // Las claves son la notación SAN, que se obtiene de chess.js una sola vez.
+  function searchRoot(fen, depth){
+    const cjs = new Chess(fen);
+    const vmoves = cjs.moves({verbose:true});
+    const sanByKey = {};
+    for(const vm of vmoves) sanByKey[vm.from+vm.to+(vm.promotion||'')] = vm.san;
+
+    const st = parseFen(fen);
+    const whiteToMove = st.turn===0;
+    const moves = genMoves(st, false);
+    const scores = {};
+    let bestMove = null, bestScore = whiteToMove ? -Infinity : Infinity, bestSan = null;
+
+    for(const m of moves){
+      if(!makeIfLegal(st, m)) continue;
+      const key = algFromSq(m.from) + algFromSq(m.to) + (m.promo ? TYPE_CHAR[m.promo] : '');
+      const budget = {count:0, q:0, max: NODE_BUDGET[depth] || 60000};
+      let ev;
+      if(!hasLegalMove(st)) ev = terminalEval(st, 1);
+      else ev = search(st, depth-1, -Infinity, Infinity, budget, 1);
+      unmakeMove(st, m);
+      const san = sanByKey[key];
+      if(san) scores[san] = ev;
+      if(whiteToMove ? ev>bestScore : ev<bestScore){ bestScore=ev; bestMove=m; bestSan=san; }
+    }
+
+    const bestVerbose = bestSan ? vmoves.find(v=>v.san===bestSan) : null;
+    return {move: bestVerbose, score: bestScore, scores};
+  }
+
+  const rootCache = new Map();
+  function cachedSearchRoot(fen, depth){
+    const key = depth+'|'+fen;
+    if(rootCache.has(key)) return rootCache.get(key);
+    const v = searchRoot(fen, depth);
+    rootCache.set(key, v);
+    return v;
+  }
+
+  function findBestMove(fen, depth){
+    const r = cachedSearchRoot(fen, depth);
+    return {move:r.move, score:r.score};
+  }
+
+  function orient(evalWhitePerspective, color){
+    return color==='w' ? evalWhitePerspective : -evalWhitePerspective;
+  }
+
+  // Traduce una jugada verbose de chess.js a una descripción natural en español,
+  // ej. "alfil a f4", "torre captura en d5", "corona a dama en e8".
+  function describeMove(m){
+    if(!m) return '';
+    if(m.flags.indexOf('k')!==-1) return 'enroque corto';
+    if(m.flags.indexOf('q')!==-1) return 'enroque largo';
+    const piece = NAME_ES[m.piece];
+    const isCapture = m.flags.indexOf('c')!==-1 || m.flags.indexOf('e')!==-1;
+    let base = m.piece==='p'
+      ? (isCapture ? `peón captura en ${m.to}` : `peón a ${m.to}`)
+      : (isCapture ? `${piece} captura en ${m.to}` : `${piece} a ${m.to}`);
+    if(m.flags.indexOf('p')!==-1 && m.promotion){
+      base += `, corona a ${NAME_ES[m.promotion]}`;
+    }
+    return base;
+  }
+
+  function sanPlus(m){
+    return `${m.san} (${describeMove(m)})`;
+  }
+
+  /* Base de aperturas conocidas (líneas principales de teoría clásica).
+     Nota honesta: esto es una lista curada, no la base de datos de millones de
+     posiciones que usan Stockfish/Lichess — meter eso haría el archivo enorme
+     y lento de cargar. Como es solo una búsqueda en texto (no un cálculo), se
+     puede ampliar tanto como haga falta sin afectar la velocidad de la app. */
+  const BOOK_LINES = [
+    // Italiana / Dos Caballos
+    "e4 e5 Nf3 Nc6 Bc4 Bc5 c3 Nf6 d3 d6".split(' '),
+    "e4 e5 Nf3 Nc6 Bc4 Bc5 c3 Nf6 d4 exd4 cxd4 Bb4+".split(' '),
+    "e4 e5 Nf3 Nc6 Bc4 Nf6 Ng5 d5 exd5 Na5".split(' '),
+    "e4 e5 Nf3 Nc6 Bc4 Nf6 d3 Bc5".split(' '),
+    // Ruy López / Española
+    "e4 e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6 O-O Be7 Re1 b5 Bb3 d6 c3 O-O h3".split(' '),
+    "e4 e5 Nf3 Nc6 Bb5 Nf6 O-O Nxe4 d4 Nd6 Bxc6 dxc6 dxe5 Nf5 Qxd8+ Kxd8".split(' '),
+    "e4 e5 Nf3 Nc6 Bb5 a6 Bxc6 dxc6 O-O f6".split(' '),
+    "e4 e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6 O-O b5 Bb3 Bc5".split(' '),
+    "e4 e5 Nf3 Nc6 Bb5 a6 Ba4 d6".split(' '),
+    // Escocesa / Vienesa / Petrov / Cuatro Caballos
+    "e4 e5 Nf3 Nc6 d4 exd4 Nxd4 Nf6 Nc3 Bb4".split(' '),
+    "e4 e5 Nf3 Nc6 d4 exd4 Nxd4 Bc5".split(' '),
+    "e4 e5 Nc3 Nf6 f4 d5".split(' '),
+    "e4 e5 Nf3 Nf6 Nxe5 d6 Nf3 Nxe4 d4 d5 Bd3 Nc6 O-O Be7".split(' '),
+    "e4 e5 Nf3 Nc6 Nc3 Nf6 Bb5 Bb4".split(' '),
+    // Siciliana
+    "e4 c5 Nf3 d6 d4 cxd4 Nxd4 Nf6 Nc3 a6 Be3 e5 Nb3 Be6".split(' '),
+    "e4 c5 Nf3 d6 d4 cxd4 Nxd4 Nf6 Nc3 a6 Bg5 e6 f4".split(' '),
+    "e4 c5 Nf3 d6 d4 cxd4 Nxd4 Nf6 Nc3 g6 Be3 Bg7 f3 O-O".split(' '),
+    "e4 c5 Nf3 Nc6 d4 cxd4 Nxd4 g6 Nc3 Bg7 Be3 Nf6".split(' '),
+    "e4 c5 Nf3 Nc6 d4 cxd4 Nxd4 Nf6 Nc3 e5 Ndb5 d6".split(' '),
+    "e4 c5 Nf3 Nc6 d4 cxd4 Nxd4 Nf6 Nc3 e5".split(' '),
+    "e4 c5 Nf3 Nc6 d4 cxd4 Nxd4 e6 Nc3 a6".split(' '),
+    "e4 c5 Nc3 Nc6 g3 g6 Bg2 Bg7 d3 d6".split(' '),
+    "e4 c5 c3 Nf6 e5 Nd5 d4 cxd4 Nf3 Nc6 cxd4 d6".split(' '),
+    "e4 c5 Nf3 e6 d4 cxd4 Nxd4 Nc6 Nc3 Qc7".split(' '),
+    // Francesa
+    "e4 e6 d4 d5 Nc3 Nf6 Bg5 Be7 e5 Nfd7".split(' '),
+    "e4 e6 d4 d5 Nc3 Bb4 e5 c5 a3 Bxc3+ bxc3".split(' '),
+    "e4 e6 d4 d5 Nd2 Nf6 e5 Nfd7 Bd3 c5 c3 Nc6".split(' '),
+    "e4 e6 d4 d5 e5 c5 c3 Nc6 Nf3 Qb6".split(' '),
+    // Caro-Kann
+    "e4 c6 d4 d5 Nc3 dxe4 Nxe4 Bf5 Ng3 Bg6 h4 h6 Nf3 Nd7".split(' '),
+    "e4 c6 d4 d5 e5 Bf5 Nf3 e6 Be2 c5".split(' '),
+    "e4 c6 d4 d5 exd5 cxd5 c4 Nf6 Nc3 Nc6".split(' '),
+    "e4 c6 d4 d5 Nd2 dxe4 Nxe4 Bf5".split(' '),
+    // Escandinava / Pirc / Moderna / Alekhine
+    "e4 d5 exd5 Qxd5 Nc3 Qa5 d4 Nf6 Nf3 c6".split(' '),
+    "e4 d5 exd5 Nf6 Nf3 Nxd5 d4 g6".split(' '),
+    "e4 d6 d4 Nf6 Nc3 g6 Be2 Bg7 Nf3 O-O".split(' '),
+    "e4 g6 d4 Bg7 Nc3 d6".split(' '),
+    "e4 Nf6 e5 Nd5 d4 d6 Nf3 g6".split(' '),
+    // Gambito de Dama
+    "d4 d5 c4 e6 Nc3 Nf6 Bg5 Be7 e3 O-O".split(' '),
+    "d4 d5 c4 e6 Nc3 Nf6 cxd5 exd5 Bg5".split(' '),
+    "d4 d5 c4 dxc4 Nf3 Nf6 e3 e6 Bxc4 c5".split(' '),
+    "d4 d5 c4 c6 Nf3 Nf6 Nc3 dxc4 a4 Bf5".split(' '),
+    "d4 d5 c4 c6 Nf3 Nf6 Nc3 e6 e3 Nbd7".split(' '),
+    // India de Rey / Grünfeld / Nimzo / Catalana / Reina India / Bogo
+    "d4 Nf6 c4 g6 Nc3 Bg7 e4 d6 Nf3 O-O Be2 e5 O-O".split(' '),
+    "d4 Nf6 c4 g6 Nc3 Bg7 e4 d6 f3 O-O Be3".split(' '),
+    "d4 Nf6 c4 g6 Nc3 d5 cxd5 Nxd5 e4 Nxc3 bxc3".split(' '),
+    "d4 Nf6 c4 e6 Nc3 Bb4 e3 O-O Bd3".split(' '),
+    "d4 Nf6 c4 e6 Nc3 Bb4 Qc2".split(' '),
+    "d4 Nf6 c4 e6 g3 d5 Bg2 Be7 Nf3 O-O".split(' '),
+    "d4 Nf6 c4 e6 Nf3 b6 g3 Bb7 Bg2 Be7".split(' '),
+    "d4 Nf6 c4 e6 Nf3 Bb4+ Bd2".split(' '),
+    // Benoni / Holandesa / Londres / Reti / Inglesa
+    "d4 Nf6 c4 c5 d5 e6 Nc3 exd5 cxd5 d6".split(' '),
+    "d4 f5 g3 Nf6 Bg2 e6 Nf3 Be7".split(' '),
+    "d4 d5 Nf3 Nf6 Bf4 e6 e3 Bd6 Bg3".split(' '),
+    "Nf3 d5 c4 e6 g3".split(' '),
+    "c4 e5 Nc3 Nf6 Nf3 Nc6 g3".split(' '),
+    "c4 c5 Nf3 Nf6 Nc3 Nc6 g3".split(' ')
+  ];
+
+  function isBookMove(sanHistoryArr){
+    const clean = sanHistoryArr.map(s=>s.replace(/[+#]/g,''));
+    return BOOK_LINES.some(line=>{
+      if(clean.length>line.length) return false;
+      for(let i=0;i<clean.length;i++){ if(line[i]!==clean[i]) return false; }
+      return true;
+    });
+  }
+
+  // Mide el saldo de material en la casilla de destino: el rival captura con su
+  // pieza más barata y nosotros recapturamos con la nuestra más barata. Si el
+  // balance nos deja perdiendo material de forma apreciable, fue un sacrificio.
+  function isRealSacrifice(fenAfter, move){
+    const g = new Chess(fenAfter);
+    const caps = g.moves({verbose:true}).filter(m=>m.to===move.to && m.flags.indexOf('c')!==-1);
+    if(caps.length===0) return false;
+    caps.sort((a,b)=>VALUE[a.piece]-VALUE[b.piece]);
+    const oppCapture = caps[0];
+    // Material que perdemos: la pieza que acabamos de mover.
+    let net = -VALUE[move.piece];
+    // Si esa jugada capturó algo, ese material ya lo habíamos ganado.
+    if(move.captured) net += VALUE[move.captured];
+    g.move(oppCapture.san);
+    const recaps = g.moves({verbose:true}).filter(m=>m.to===move.to && m.flags.indexOf('c')!==-1);
+    if(recaps.length>0){
+      recaps.sort((a,b)=>VALUE[a.piece]-VALUE[b.piece]);
+      net += VALUE[recaps[0].captured];
+    }
+    return net <= -200;
+  }
+
+  function classify(fenBefore, fenAfter, color, move, depth, sanSoFar){
+    if(sanSoFar && isBookMove(sanSoFar)){
+      return {
+        label:'libro', loss:0,
+        evalBefore: evalFen(fenBefore),
+        evalAfter: evalFen(fenAfter),
+        deltaForMover:0
+      };
+    }
+
+    const d = depth || 2;
+
+    // ANTES se comparaba la búsqueda de la posición previa contra la búsqueda de la
+    // posición siguiente. Eso está mal: son búsquedas que terminan en turnos distintos,
+    // así que no son comparables entre sí y producían saltos artificiales de un peón
+    // o más en jugadas totalmente normales (de ahí el exceso de "pifias").
+    // Ahora se compara, dentro de UNA misma búsqueda, la jugada que se hizo contra
+    // la mejor jugada que había disponible — que es como analiza un motor de verdad.
+    const root = cachedSearchRoot(fenBefore, d);
+    const bestScore = root.score;
+    const playedScore = (move.san in root.scores)
+      ? root.scores[move.san]
+      : cachedEngineEval(fenAfter, d-1);
+
+    const bestForMover = orient(bestScore, color);
+    const playedForMover = orient(playedScore, color);
+    const loss = Math.max(0, bestForMover - playedForMover);
+
+    // Clasificar por CAÍDA DE PROBABILIDAD DE VICTORIA, no por peones perdidos.
+    // Perder un peón estando con dama de ventaja casi no cambia nada; perderlo en
+    // una posición igualada lo cambia todo. Chess.com y Lichess lo miden así, y es
+    // la razón principal por la que aquí antes salían "pifias" que no lo eran.
+    const wpBest = winPercent(bestForMover*100);
+    const wpPlayed = winPercent(playedForMover*100);
+    const winDrop = Math.max(0, wpBest - wpPlayed);
+    const isBest = root.move && move.san===root.move.san;
+
+    // ¿Sacrificio de verdad? No basta con que la pieza sea capturable (eso pasa en
+    // cualquier desarrollo o cambio normal). Se exige que, tras la captura del rival
+    // y nuestra mejor recaptura, el saldo de material sea claramente negativo para
+    // nosotros — y aun así la posición siga siendo igual de buena.
+    const brilliant = winDrop<=2 && VALUE[move.piece]>=300 && isRealSacrifice(fenAfter, move);
+
+    let label;
+    if(brilliant) label='brillante';
+    else if(isBest || winDrop<2) label='excelente';
+    else if(winDrop<5) label='buena';
+    else if(winDrop<10) label='inexactitud';
+    else if(winDrop<20) label='error';
+    else label='pifia';
+
+    return {
+      label, loss, winDrop, isBest,
+      evalBefore: bestScore,
+      evalAfter: playedScore,
+      deltaForMover: playedForMover - bestForMover
+    };
+  }
+
+  function explain(entry){
+    if(entry.class.label==='libro'){
+      return `Es una jugada dentro de teoría de apertura conocida ("de libro"): miles de partidas se han jugado así, por lo que no hace falta un análisis profundo del motor para confiar en ella.`;
+    }
+    if(entry.class.label==='brillante'){
+      return `Entregaste ${NAME_ES[entry.move.piece]} de forma deliberada (queda capturable), pero el motor confirma que tu posición sigue igual de bien o mejor: la actividad y el ataque que ganas a cambio compensan el material.`;
+    }
+    if(entry.class.label==='excelente'){
+      return entry.class.isBest
+        ? `Es exactamente la jugada que el motor eligió como mejor en esa posición. No había nada más preciso disponible.`
+        : `Prácticamente igual de buena que la mejor jugada disponible: tu probabilidad de ganar apenas cambió (${entry.class.winDrop.toFixed(1)}% de diferencia).`;
+    }
+    if(entry.class.label==='buena'){
+      return `Una jugada sólida y normal. No era la más precisa, pero la diferencia frente a la mejor opción es pequeña (${entry.class.winDrop.toFixed(1)}% de probabilidad de ganar) y no cambia el rumbo de la partida.`;
+    }
+    // buscar si dejó algo colgado
+    const g = new Chess(entry.fenAfter);
+    const oppMoves = g.moves({verbose:true}).filter(m=>m.flags.indexOf('c')!==-1);
+    oppMoves.sort((a,b)=>VALUE[b.captured]-VALUE[a.captured]);
+    const big = oppMoves[0];
+    let reason;
+    if(big && VALUE[big.captured]>=300){
+      reason = `Tu ${NAME_ES[big.captured]} quedó sin la defensa suficiente: el rival puede capturarla jugando ${sanPlus(big)}.`;
+    } else if(entry.class.label==='inexactitud'){
+      reason = `Cediste algo de precisión: probablemente perdiste actividad de piezas, tiempo, o el control de una casilla clave respecto a la alternativa más exacta.`;
+    } else if(entry.class.label==='error'){
+      reason = `Existía una alternativa claramente mejor. Es probable que hayas cedido iniciativa, debilitado tu estructura de peones o dejado al rey más expuesto de lo necesario.`;
+    } else {
+      reason = `La posición cambió de rumbo de forma grave: normalmente esto ocurre al dejar material sin defensa, permitir una táctica del rival o abrir líneas hacia tu propio rey.`;
+    }
+    return `${reason} Frente a la mejor jugada disponible, tu probabilidad de ganar bajó ${entry.class.winDrop.toFixed(1)} puntos porcentuales (equivalente a unos ${entry.class.loss.toFixed(2)} peones).`;
+  }
+
+  /* ---------------- Puntuación de precisión (estilo chess.com) ----------------
+     Chess.com no publica su fórmula exacta, pero el método público más conocido
+     (usado también por Lichess) convierte la evaluación en "% de probabilidad de
+     ganar" con una sigmoide, y mide cuánto cae ese % con cada jugada. Es la misma
+     idea que aplicamos aquí; el resultado es una aproximación razonable, no un
+     cálculo idéntico al de Chess.com. */
+  function winPercent(cp){
+    return 50 + 50 * (2/(1+Math.exp(-0.00368208*cp)) - 1);
+  }
+  function moveAccuracyPct(entry){
+    if(entry.class.label==='libro') return 100;
+    // Usa la caída de probabilidad de victoria frente a la mejor jugada disponible.
+    // Factor de compensación (~1.35x): nuestro motor busca mucho menos profundo que
+    // Stockfish, así que su "mejor jugada" de referencia es más débil que la real —
+    // eso hace que subestime cuán grave es un error de verdad. Sin esta corrección,
+    // la puntuación final salía sistemáticamente más alta de lo que correspondía.
+    const rawDrop = (typeof entry.class.winDrop === 'number') ? entry.class.winDrop : 0;
+    const drop = rawDrop * 1.35;
+    let acc = 103.1668*Math.exp(-0.04354*drop) - 3.1669;
+    if(isNaN(acc)) acc = 100;
+    return Math.max(0, Math.min(100, acc));
+  }
+
+  function harmonicMean(vals){
+    if(vals.length===0) return 100;
+    let s=0;
+    for(const v of vals) s += 1/Math.max(v,0.1);
+    return vals.length/s;
+  }
+  function stdevOf(vals){
+    if(vals.length<2) return 0;
+    const m = vals.reduce((a,b)=>a+b,0)/vals.length;
+    const v = vals.reduce((a,b)=>a+(b-m)*(b-m),0)/vals.length;
+    return Math.sqrt(v);
+  }
+  // Puntuación de la partida para un color: NO es un promedio simple (eso diluye
+  // errores reales entre muchas jugadas correctas). Se combina una media ponderada
+  // -dando más peso a los momentos volátiles/críticos de la partida- con una media
+  // armónica -que castiga fuerte cualquier jugada realmente mala-, tal como describe
+  // públicamente el método de Lichess (Chess.com no publica el suyo, pero es la
+  // referencia pública más cercana). El resultado es una aproximación razonable,
+  // no un cálculo idéntico al de ninguno de los dos.
+  function gameAccuracy(colorFilterFn){
+    if(!history.length) return null;
+    const curve = [winPercent(orient(cachedEngineEval(history[0].fenBefore, 3), 'w')*100)];
+    for(const e of history) curve.push(winPercent(orient(e.class.evalAfter, 'w')*100));
+
+    const accs = [], weights = [];
+    history.forEach((e, i)=>{
+      if(!colorFilterFn(e)) return;
+      const lo = Math.max(0, i+1-4), hi = Math.min(curve.length-1, i+1+4);
+      const sd = stdevOf(curve.slice(lo, hi+1));
+      accs.push(moveAccuracyPct(e));
+      weights.push(Math.min(12, Math.max(0.5, sd)));
+    });
+    if(accs.length===0) return null;
+    let sw=0, swv=0;
+    for(let i=0;i<accs.length;i++){ sw+=weights[i]; swv+=weights[i]*accs[i]; }
+    const weighted = swv/sw;
+    const harmonic = harmonicMean(accs);
+    return (weighted + harmonic) / 2;
+  }
+
+  /* ---------------- Estado de la app ---------------- */
+  let game = new Chess();
+  let history = []; // {san, color, move, fenBefore, fenAfter, class}
+  let viewIndex = 0; // 0 = posición inicial; N = después de la jugada N (1-indexada en history[N-1])
+  let selectedSquare = null;
+
+  const boardEl = document.getElementById('board');
+  const evalFill = document.getElementById('evalFill');
+  const evalNum = document.getElementById('evalNum');
+  const moveListEl = document.getElementById('moveList');
+  const classPanel = document.getElementById('classPanel');
+  const classPanelEmpty = document.getElementById('classPanelEmpty');
+  const classBadge = document.getElementById('classBadge');
+  const classMeta = document.getElementById('classMeta');
+  const bestBox = document.getElementById('bestBox');
+  const explainBox = document.getElementById('explainBox');
+
+  const LABEL_ICON = {brillante:'💎', excelente:'👑', buena:'✅', inexactitud:'⚠️', error:'🔶', pifia:'❌', libro:'📖'};
+  const LABEL_TXT = {brillante:'BRILLANTE', excelente:'EXCELENTE', buena:'BUENA', inexactitud:'INEXACTITUD', error:'ERROR', pifia:'PIFIA', libro:'DE LIBRO'};
+
+  function fenAtView(){
+    if(viewIndex===0) return new Chess().fen();
+    return history[viewIndex-1].fenAfter;
+  }
+
+  function renderBoard(){
+    const fen = fenAtView();
+    const g = new Chess(fen);
+    const board = g.board();
+    boardEl.innerHTML = '';
+    const last = viewIndex>0 ? history[viewIndex-1].move : null;
+    let legalTargets = [];
+    if(selectedSquare){
+      legalTargets = g.moves({square:selectedSquare, verbose:true}).map(m=>m.to);
+    }
+    for(let r=0;r<8;r++){
+      for(let c=0;c<8;c++){
+        const file = 'abcdefgh'[c];
+        const rank = 8-r;
+        const sqName = file+rank;
+        const p = board[r][c];
+        const div = document.createElement('div');
+        div.className = 'sq ' + (((r+c)%2===0) ? 'light':'dark');
+        if(sqName===selectedSquare) div.className+=' selected';
+        if(last && (sqName===last.from || sqName===last.to)) div.className+=' lastmove';
+        if(legalTargets.indexOf(sqName)!==-1) div.className += ' legal' + (p ? ' has-piece':'');
+        if(p){
+          const span = document.createElement('span');
+          span.className = p.color==='w' ? 'piece-w' : 'piece-b';
+          span.textContent = pieceGlyph(p.type, p.color);
+          div.appendChild(span);
+        }
+        if(c===0){
+          const rankLabel = document.createElement('span');
+          rankLabel.className = 'coord coord-rank';
+          rankLabel.textContent = rank;
+          div.appendChild(rankLabel);
+        }
+        if(r===7){
+          const fileLabel = document.createElement('span');
+          fileLabel.className = 'coord coord-file';
+          fileLabel.textContent = file;
+          div.appendChild(fileLabel);
+        }
+        div.dataset.sq = sqName;
+        div.addEventListener('click', onSquareClick);
+        boardEl.appendChild(div);
+      }
+    }
+  }
+
+  function pieceGlyph(type, color){
+    const map = {p:'♟',n:'♞',b:'♝',r:'♜',q:'♛',k:'♚'};
+    return map[type];
+  }
+
+  function onSquareClick(e){
+    // Solo se puede mover estando en la última posición del historial
+    if(viewIndex !== history.length){
+      viewIndex = history.length;
+      selectedSquare = null;
+    }
+    const sq = e.currentTarget.dataset.sq;
+    const g = new Chess(fenAtView());
+    const piece = g.get(sq);
+
+    if(selectedSquare){
+      const legal = g.moves({square:selectedSquare, verbose:true});
+      const target = legal.find(m=>m.to===sq);
+      if(target){
+        makeMove(selectedSquare, sq, target.promotion ? 'q' : undefined);
+        selectedSquare = null;
+        renderAll();
+        return;
+      }
+    }
+    if(piece && piece.color===g.turn()){
+      selectedSquare = sq;
+    } else {
+      selectedSquare = null;
+    }
+    renderBoard();
+  }
+
+  function makeMove(from, to, promotion){
+    const fenBefore = game.fen();
+    const moveObj = game.move({from, to, promotion: promotion || 'q'});
+    if(!moveObj) return null;
+    const fenAfter = game.fen();
+    const sanSoFar = game.history();
+    const cls = classify(fenBefore, fenAfter, moveObj.color, moveObj, 3, sanSoFar);
+    const entry = {san:moveObj.san, color:moveObj.color, move:moveObj, fenBefore, fenAfter, class:cls};
+    history.push(entry);
+    viewIndex = history.length;
+    return entry;
+  }
+
+  // Quita comentarios {...}, comentarios ;..., NAGs ($n) y variantes (...) antes de parsear,
+  // porque muchas PGN exportadas por Chess.com/Lichess incluyen anotaciones de reloj/eval
+  // que rompen el parser y provocaban que la carga se quedara "pausada" o fallara en silencio.
+  function sanitizePgn(text){
+    let t = text.replace(/\{[^}]*\}/g, ' ');
+    t = t.replace(/;[^\n]*/g, ' ');
+    t = t.replace(/\$\d+/g, ' ');
+    let prev;
+    do{ prev = t; t = t.replace(/\([^()]*\)/g, ' '); } while(t!==prev);
+    return t;
+  }
+
+  // Carga una partida completa de forma ASÍNCRONA y por lotes, mostrando progreso,
+  // para no bloquear el navegador (esto es lo que antes se sentía como "congelado").
+  // La profundidad se adapta a la longitud de la partida: partidas cortas se
+  // analizan más a fondo (más precisas); partidas muy largas usan una búsqueda
+  // más rápida para no volverse lentas.
+  async function loadFromSanAsync(sanList, statusEl){
+    game = new Chess();
+    history = [];
+    viewIndex = 0;
+    selectedSquare = null;
+    startEvalCache = null;
+    renderAll();
+    const total = sanList.length;
+    // Con el motor propio el análisis es ~75x más rápido que antes, así que las
+    // partidas normales se pueden analizar a profundidad 3 sin que se note.
+    const depth = total<=90 ? 3 : 2;
+    let loaded = 0;
+    for(let i=0;i<total;i++){
+      let moveObj = null;
+      const fenBefore = game.fen();
+      try{ moveObj = game.move(sanList[i], {sloppy:true}); } catch(e){ moveObj = null; }
+      if(!moveObj) break;
+      const fenAfter = game.fen();
+      const sanSoFar = game.history();
+      const cls = classify(fenBefore, fenAfter, moveObj.color, moveObj, depth, sanSoFar);
+      history.push({san:moveObj.san, color:moveObj.color, move:moveObj, fenBefore, fenAfter, class:cls});
+      loaded++;
+      if(statusEl && (i % 3 === 0)) statusEl.textContent = `Analizando jugada ${i+1} de ${total}...`;
+      if(i % 3 === 2) await new Promise(r=>setTimeout(r, 0));
+    }
+    viewIndex = history.length;
+    renderAll();
+    if(statusEl){
+      statusEl.textContent = loaded===total
+        ? `Partida cargada: ${loaded} jugadas analizadas.`
+        : `Se cargaron ${loaded} de ${total} jugadas; el resto no se pudo interpretar (notación no reconocida).`;
+    }
+    return loaded;
+  }
+
+  async function loadPgnString(pgnText, statusEl){
+    const clean = sanitizePgn(pgnText);
+    const temp = new Chess();
+    // chess.js 0.10.3 puede devolver `false` aunque haya interpretado las jugadas
+    // bien, si el texto no trae encabezados [Event "..."] etc. (común al copiar
+    // solo el texto de las jugadas). Por eso NO nos fiamos de ese booleano: miramos
+    // directamente si quedaron jugadas cargadas.
+    temp.load_pgn(clean, {sloppy:true});
+    const sanList = temp.history();
+    if(sanList.length===0){
+      if(statusEl) statusEl.textContent = 'No se pudo leer esa PGN (formato no reconocido).';
+      return false;
+    }
+    if(statusEl) statusEl.textContent = `Analizando jugada 1 de ${sanList.length}...`;
+    await loadFromSanAsync(sanList, statusEl);
+    return true;
+  }
+
+  function renderMoveList(){
+    if(history.length===0){
+      moveListEl.innerHTML = '<div class="empty-hint">Aún no hay jugadas. Juega en el tablero, carga una PGN o trae una partida de Chess.com.</div>';
+      return;
+    }
+    moveListEl.innerHTML = '';
+    history.forEach((entry, i)=>{
+      const chip = document.createElement('div');
+      chip.className = 'movechip tag-'+entry.class.label + (viewIndex===i+1 ? ' active':'');
+      const num = Math.floor(i/2)+1;
+      const prefix = entry.color==='w' ? num+'.' : num+'...';
+      chip.textContent = prefix+' '+entry.san;
+      chip.addEventListener('click', ()=>{ viewIndex = i+1; selectedSquare=null; renderAll(); });
+      moveListEl.appendChild(chip);
+    });
+  }
+
+  let startEvalCache = null;
+
+  function renderEval(){
+    const fen = fenAtView();
+    let ev;
+    if(viewIndex===0){
+      if(startEvalCache===null) startEvalCache = cachedEngineEval(fen, 3);
+      ev = startEvalCache;
+    } else {
+      const g = new Chess(fen);
+      if(g.in_checkmate()){
+        ev = g.turn()==='w' ? -99 : 99;
+      } else {
+        // Reutiliza la evaluación ya calculada al clasificar esta jugada,
+        // en vez de recalcularla cada vez que navegas (esto era lo más lento).
+        ev = history[viewIndex-1].class.evalAfter;
+      }
+    }
+    const clamped = Math.max(-6, Math.min(6, ev));
+    const pct = 50 + clamped*8;
+    evalFill.style.width = pct+'%';
+    evalNum.textContent = (ev>=99 ? 'Mate' : ev<=-99 ? 'Mate' : (ev>0?'+':'')+ev.toFixed(2));
+  }
+
+  function renderAccuracy(){
+    const panel = document.getElementById('accuracyPanel');
+    if(history.length===0){
+      panel.innerHTML = '<div class="empty-hint">Juega o carga una partida para ver el marcador.</div>';
+      return;
+    }
+    const wAcc = gameAccuracy(e=>e.color==='w');
+    const bAcc = gameAccuracy(e=>e.color==='b');
+    panel.innerHTML = `
+      <div class="acc-row"><span>♙ Blancas</span><div class="acc-track"><div class="acc-fill" style="width:${wAcc?wAcc.toFixed(1):0}%"></div></div><b>${wAcc?wAcc.toFixed(1):'—'}/100</b></div>
+      <div class="acc-row"><span>♟ Negras</span><div class="acc-track"><div class="acc-fill dark" style="width:${bAcc?bAcc.toFixed(1):0}%"></div></div><b>${bAcc?bAcc.toFixed(1):'—'}/100</b></div>
+    `;
+  }
+
+  function renderClassPanel(){
+    bestBox.style.display='none';
+    explainBox.style.display='none';
+    if(viewIndex===0){
+      classPanel.style.display='none';
+      classPanelEmpty.style.display='block';
+      return;
+    }
+    classPanelEmpty.style.display='none';
+    classPanel.style.display='block';
+    const entry = history[viewIndex-1];
+    classBadge.className = 'class-badge '+entry.class.label;
+    classBadge.textContent = LABEL_ICON[entry.class.label]+' '+LABEL_TXT[entry.class.label];
+    const who = entry.color==='w' ? 'Blancas' : 'Negras';
+    const dropTxt = (typeof entry.class.winDrop === 'number')
+      ? `<br>Frente a la mejor jugada: −${entry.class.winDrop.toFixed(1)}% de probabilidad de ganar`
+      : '';
+    classMeta.innerHTML = `<b>${who} jugaron ${sanPlus(entry.move)}</b><br>Evaluación: ${entry.class.evalBefore.toFixed(2)} ➡️ ${entry.class.evalAfter.toFixed(2)}${dropTxt}`;
+  }
+
+  function renderAll(){
+    renderBoard();
+    renderMoveList();
+    renderEval();
+    renderAccuracy();
+    renderClassPanel();
+    document.getElementById('btnPrev').disabled = viewIndex===0;
+    document.getElementById('btnStart').disabled = viewIndex===0;
+    document.getElementById('btnNext').disabled = viewIndex===history.length;
+    document.getElementById('btnEnd').disabled = viewIndex===history.length;
+  }
+
+  /* ---------------- Botones ---------------- */
+  document.getElementById('btnStart').onclick = ()=>{ viewIndex=0; selectedSquare=null; renderAll(); };
+  document.getElementById('btnEnd').onclick = ()=>{ viewIndex=history.length; selectedSquare=null; renderAll(); };
+  document.getElementById('btnPrev').onclick = ()=>{ if(viewIndex>0){viewIndex--; selectedSquare=null; renderAll();} };
+  document.getElementById('btnNext').onclick = ()=>{ if(viewIndex<history.length){viewIndex++; selectedSquare=null; renderAll();} };
+  document.getElementById('btnReset').onclick = ()=>{
+    game = new Chess(); history=[]; viewIndex=0; selectedSquare=null; startEvalCache=null; evalCache.clear(); rootCache.clear(); renderAll();
+  };
+
+  document.querySelectorAll('.tab').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      const target = btn.dataset.tab;
+      document.querySelectorAll('.tabpanel').forEach(p=>{ p.hidden = (p.dataset.panel !== target); });
+    });
+  });
+
+  document.getElementById('btnLoadPgn').onclick = async ()=>{
+    const pgn = document.getElementById('pgnInput').value.trim();
+    const statusEl = document.getElementById('pgnStatus');
+    if(!pgn){ statusEl.textContent='Pega una PGN primero.'; return; }
+    await loadPgnString(pgn, statusEl);
+  };
+
+  document.getElementById('btnBest').onclick = ()=>{
+    const entry = history[viewIndex-1];
+    bestBox.textContent = 'Calculando...';
+    bestBox.style.display='block';
+    setTimeout(()=>{
+      // Es una sola posición y el usuario la pidió expresamente: se busca más hondo.
+      const {move, score} = findBestMove(entry.fenBefore, 4);
+      if(!move){ bestBox.textContent='No se encontró alternativa (posición terminal).'; return; }
+      const matched = move.san===entry.san;
+      bestBox.innerHTML = `Según nuestro motor, la jugada más precisa en esa posición era <b>${sanPlus(move)}</b> (evaluación resultante: ${score.toFixed(2)}).`
+        + (matched ? ' <br>¡Justo la jugada que hiciste!' : ` En cambio, jugaste <b>${sanPlus(entry.move)}</b>.`);
+    }, 10);
+  };
+
+  document.getElementById('btnWhy').onclick = ()=>{
+    const entry = history[viewIndex-1];
+    explainBox.textContent = explain(entry);
+    explainBox.style.display='block';
+  };
+
+  /* ---------------- Chess.com ---------------- */
+  document.getElementById('btnCcFetch').onclick = async ()=>{
+    const user = document.getElementById('ccUsername').value.trim().toLowerCase();
+    const statusEl = document.getElementById('ccStatus');
+    const listEl = document.getElementById('ccGames');
+    listEl.innerHTML = '';
+    if(!user){ statusEl.textContent='Escribe un nombre de usuario.'; return; }
+    statusEl.textContent = 'Buscando partidas...';
+    try{
+      const archRes = await fetch(`https://api.chess.com/pub/player/${user}/games/archives`);
+      if(!archRes.ok) throw new Error('archivo no encontrado');
+      const archData = await archRes.json();
+      const archives = archData.archives;
+      if(!archives || archives.length===0){ statusEl.textContent='Ese usuario no tiene partidas públicas.'; return; }
+      const lastUrl = archives[archives.length-1];
+      const gamesRes = await fetch(lastUrl);
+      const gamesData = await gamesRes.json();
+      let games = gamesData.games || [];
+      games = games.slice(-12).reverse();
+      if(games.length===0){ statusEl.textContent='No hay partidas en el último mes de ese usuario.'; return; }
+      statusEl.textContent = `${games.length} partida(s) recientes encontradas:`;
+      games.forEach(gm=>{
+        const item = document.createElement('div');
+        item.className = 'cc-game-item';
+        const white = gm.white && gm.white.username ? gm.white.username : '?';
+        const black = gm.black && gm.black.username ? gm.black.username : '?';
+        const result = (gm.white && gm.white.result) || '';
+        item.textContent = `${white} vs ${black} — ${result}`;
+        item.addEventListener('click', async ()=>{
+          if(!gm.pgn){ statusEl.textContent='Esa partida no incluye PGN.'; return; }
+          document.getElementById('pgnInput').value = gm.pgn;
+          await loadPgnString(gm.pgn, statusEl);
+        });
+        listEl.appendChild(item);
+      });
+    } catch(err){
+      statusEl.textContent = 'No se pudo conectar con Chess.com (bloqueo de red/CORS o usuario inválido). Alternativa: copia la PGN de la partida desde Chess.com (botón "Compartir → PGN") y pégala arriba en "Importar partida".';
+    }
+  };
+
+  /* ---------------- Revisar por enlace ---------------- */
+  document.getElementById('btnLoadLink').onclick = async ()=>{
+    const url = document.getElementById('gameLinkInput').value.trim();
+    const statusEl = document.getElementById('linkStatus');
+    if(!url){ statusEl.textContent='Pega un enlace primero.'; return; }
+    statusEl.textContent = 'Buscando la partida...';
+
+    try{
+      // Enlace .pgn directo
+      if(/\.pgn(\?.*)?$/i.test(url)){
+        const res = await fetch(url);
+        if(!res.ok) throw new Error('no ok');
+        const text = await res.text();
+        await loadPgnString(text, statusEl);
+        return;
+      }
+
+      // Lichess: lichess.org/abcd1234 (8 caracteres, con o sin sufijo /black, /white, #N)
+      const lichessMatch = url.match(/lichess\.org\/([A-Za-z0-9]{8})/);
+      if(lichessMatch){
+        const gameId = lichessMatch[1];
+        const res = await fetch(`https://lichess.org/game/export/${gameId}?pgn=1&clocks=0&evals=0&literate=0`, {
+          headers:{'Accept':'application/x-chess-pgn'}
+        });
+        if(!res.ok) throw new Error('lichess no ok');
+        const text = await res.text();
+        await loadPgnString(text, statusEl);
+        return;
+      }
+
+      // Chess.com: intento best-effort vía su endpoint interno (no oficial)
+      const ccMatch = url.match(/chess\.com\/(?:analysis\/game\/)?(live|daily)\/game\/(\d+)/) ||
+                       url.match(/chess\.com\/game\/(live|daily)\/(\d+)/);
+      if(ccMatch){
+        const type = ccMatch[1];
+        const id = ccMatch[2];
+        const res = await fetch(`https://www.chess.com/callback/${type}/game/${id}`);
+        if(!res.ok) throw new Error('chess.com no ok');
+        const data = await res.json();
+        const pgn = data && data.game && data.game.pgn;
+        if(pgn){
+          await loadPgnString(pgn, statusEl);
+        } else {
+          statusEl.textContent = 'Chess.com no expuso la PGN de esta partida por esta vía (su formato interno no siempre la incluye). Usa la sección "Conectar con Chess.com" con el nombre de usuario, o copia la PGN desde "Compartir → PGN" en la propia partida y pégala en "Importar partida".';
+        }
+        return;
+      }
+
+      statusEl.textContent = 'No reconozco ese enlace. Admite enlaces de Lichess, enlaces de partida de Chess.com, o un enlace directo a un archivo .pgn.';
+    } catch(err){
+      statusEl.textContent = 'No se pudo obtener la partida (bloqueo de red/CORS o enlace no accesible). Alternativa segura: copia la PGN desde el sitio de origen ("Compartir → PGN") y pégala en "Importar partida".';
+    }
+  };
+
+  renderAll();
+})();
+</script>
+</body>
+</html>
