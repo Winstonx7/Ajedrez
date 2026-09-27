@@ -127,30 +127,40 @@
   }
   .sq.light{background:var(--ivory);}
   .sq.dark{background:var(--walnut);}
-  .sq.selected{outline:3px solid var(--brilliant) inset;}
+  .sq.selected{box-shadow:inset 0 0 0 3px var(--brilliant);}
   .sq.legal::after{
     content:'';
     position:absolute;width:26%;height:26%;border-radius:50%;
     background:rgba(60,50,30,.45);
+    z-index:1;
   }
+  /* Casilla de captura legal: un anillo alrededor de la pieza, en vez de un
+     bloque de color encima, para que la pieza y las coordenadas se sigan
+     viendo perfectamente bien (antes este overlay, al ser position:absolute,
+     se pintaba SIEMPRE por encima del contenido normal de la casilla —
+     incluida la pieza— tapándola parcialmente; por eso "cambiaba de forma"
+     y "las letras a veces no se veían" al marcar los movimientos legales). */
   .sq.legal.has-piece::after{
-    width:100%;height:100%;border-radius:0;
-    background:rgba(176,74,60,.35);
+    width:88%;height:88%;border-radius:50%;
+    background:transparent;
+    box-shadow:inset 0 0 0 4px rgba(176,74,60,.75);
   }
   .sq.lastmove{box-shadow:inset 0 0 0 3px rgba(201,163,78,.75);}
   .piece-w{
+    position:relative; z-index:2;
     color:#fdfbf4;
     text-shadow:-1px -1px 0 #241f18, 1px -1px 0 #241f18, -1px 1px 0 #241f18, 1px 1px 0 #241f18, 0 2px 4px rgba(0,0,0,.55);
   }
   .piece-b{
+    position:relative; z-index:2;
     color:#191510;
     text-shadow:-1px -1px 0 #f4ecd8, 1px -1px 0 #f4ecd8, -1px 1px 0 #f4ecd8, 1px 1px 0 #f4ecd8, 0 2px 3px rgba(0,0,0,.35);
   }
-  .coord{position:absolute;font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;line-height:1;pointer-events:none;opacity:.85;}
+  .coord{position:absolute;font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;line-height:1;pointer-events:none;opacity:.9;z-index:3;}
   .coord-rank{top:3px;left:4px;}
   .coord-file{bottom:2px;right:4px;}
-  .sq.light .coord{color:var(--walnut);}
-  .sq.dark .coord{color:var(--ivory);}
+  .sq.light .coord{color:var(--walnut); text-shadow:0 1px 1px rgba(255,255,255,.35);}
+  .sq.dark .coord{color:var(--ivory); text-shadow:0 1px 1px rgba(0,0,0,.45);}
   .controls{display:flex;gap:8px;}
   button{
     font-family:'IBM Plex Sans', sans-serif;
@@ -274,7 +284,312 @@
   .tabpanel[hidden]{display:none;}
   .tab-hint{margin:0 0 10px;color:var(--muted);font-size:12.5px;line-height:1.5;}
   .tab-hint b{color:var(--text);}
+
+/* ================================================================
+   Cuentas de usuario + Freemium/Pricing (Gran Maestro de Bolsillo)
+   ================================================================ */
+
+/* ---------- Barra flotante de sesión ---------- */
+.gm-auth-bar{
+  position:fixed; top:18px; right:18px; z-index:1000;
+  display:flex; align-items:center; gap:10px;
+}
+.gm-auth-btn{
+  padding:9px 20px; border-radius:999px; border:1px solid var(--line);
+  background:var(--panel-2); color:var(--ivory); font-weight:600; font-size:14px;
+  font-family:inherit; cursor:pointer; transition:background .15s, transform .15s;
+}
+.gm-auth-btn:hover{ background:var(--line); transform:translateY(-1px); }
+.gm-user-box{
+  display:flex; align-items:center; gap:8px;
+  background:var(--panel-2); border:1px solid var(--line);
+  border-radius:999px; padding:6px 8px 6px 16px;
+}
+.gm-user-box[hidden]{ display:none; }
+.gm-user-name{ font-weight:600; color:var(--ivory); font-size:14px; white-space:nowrap; }
+.gm-user-badge{
+  background:var(--brilliant); color:#241d10; font-size:10px; font-weight:700;
+  padding:3px 9px; border-radius:999px; letter-spacing:.04em;
+}
+.gm-auth-btn-ghost{
+  background:transparent; border:1px solid var(--line); color:var(--muted);
+  padding:6px 13px; border-radius:999px; font-size:12.5px; font-family:inherit;
+  cursor:pointer; white-space:nowrap; transition:color .15s, border-color .15s;
+}
+.gm-auth-btn-ghost:hover{ color:var(--ivory); border-color:var(--walnut); }
+
+/* ---------- Overlay + modal base (glassmorphism) ---------- */
+.gm-modal-overlay{
+  position:fixed; inset:0; z-index:9999; display:none;
+  align-items:center; justify-content:center; padding:20px;
+  background:rgba(10,8,5,.62);
+}
+.gm-modal-overlay.gm-open{ display:flex; animation:gmOverlayIn .2s ease-out; }
+.gm-modal-overlay.gm-closing{ animation:gmOverlayOut .16s ease-in forwards; }
+@keyframes gmOverlayIn{ from{opacity:0;} to{opacity:1;} }
+@keyframes gmOverlayOut{ from{opacity:1;} to{opacity:0;} }
+
+.gm-modal{
+  position:relative; width:100%; color:var(--text);
+  background:rgba(38,34,24,.78);
+  backdrop-filter:blur(18px) saturate(140%);
+  -webkit-backdrop-filter:blur(18px) saturate(140%);
+  border:1px solid rgba(233,224,200,.1);
+  border-radius:18px;
+  box-shadow:0 30px 80px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.04);
+  padding:34px 30px;
+  animation:gmModalIn .22s cubic-bezier(.2,.9,.3,1.2);
+}
+.gm-modal-overlay.gm-closing .gm-modal{ animation:gmModalOut .16s ease-in forwards; }
+@keyframes gmModalIn{
+  from{ transform:scale(.92) translateY(10px); opacity:0; }
+  to{ transform:scale(1) translateY(0); opacity:1; }
+}
+@keyframes gmModalOut{
+  from{ transform:scale(1); opacity:1; }
+  to{ transform:scale(.94); opacity:0; }
+}
+.gm-modal-close{
+  position:absolute; top:14px; right:14px;
+  width:32px; height:32px; border-radius:50%;
+  border:1px solid var(--line); background:transparent; color:var(--muted);
+  font-size:19px; line-height:1; cursor:pointer; transition:color .15s, border-color .15s;
+}
+.gm-modal-close:hover{ color:var(--ivory); border-color:var(--walnut); }
+.gm-modal-title{
+  margin:0 0 20px; font-family:'Fraunces', serif; font-size:1.35rem;
+  color:var(--ivory); text-align:center;
+}
+
+/* ---------- Modal de Login/Registro ---------- */
+.gm-auth-modal{ max-width:400px; }
+.gm-tabs{
+  display:flex; gap:6px; margin-bottom:22px;
+  background:var(--panel); border-radius:12px; padding:4px;
+}
+.gm-tab{
+  flex:1; padding:10px; border:none; background:transparent;
+  color:var(--muted); font-weight:600; font-family:inherit;
+  border-radius:9px; cursor:pointer; font-size:14px; transition:background .15s, color .15s;
+}
+.gm-tab.active{ background:var(--brilliant); color:#241d10; }
+.gm-auth-form{ display:flex; flex-direction:column; gap:14px; }
+.gm-auth-form[hidden]{ display:none; }
+.gm-auth-form label{
+  display:flex; flex-direction:column; gap:6px; font-size:13px; color:var(--muted);
+}
+.gm-auth-form input{
+  padding:11px 12px; border-radius:10px; border:1px solid var(--line);
+  background:rgba(21,19,16,.6); color:var(--text); font-size:14px; font-family:inherit;
+}
+.gm-auth-form input:focus{ outline:none; border-color:var(--brilliant); }
+.gm-btn-primary{
+  display:inline-block; text-align:center; text-decoration:none;
+  margin-top:4px; padding:12px 16px; border:none; border-radius:10px;
+  background:var(--brilliant); color:#241d10; font-weight:700; font-size:14.5px;
+  font-family:inherit; cursor:pointer; transition:transform .12s, filter .12s;
+}
+.gm-btn-primary:hover{ filter:brightness(1.08); transform:translateY(-1px); }
+.gm-form-msg{ margin-top:12px; font-size:13px; min-height:1.2em; text-align:center; }
+.gm-form-msg.ok{ color:var(--excellent); }
+.gm-form-msg.err{ color:var(--blunder); }
+
+/* ---------- Modal de Precios ---------- */
+.gm-pricing-modal{ max-width:640px; }
+.gm-pricing-modal #gmPricingTitle{
+  margin:0 0 24px; font-family:'Fraunces', serif; font-size:1.5rem;
+  text-align:center; color:var(--ivory);
+}
+.gm-plans{ display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+.gm-plan{
+  border:1px solid var(--line); border-radius:14px; padding:22px 18px;
+  background:rgba(21,19,16,.4); display:flex; flex-direction:column;
+}
+.gm-plan h3{ margin:0 0 6px; font-size:1.05rem; color:var(--ivory); }
+.gm-plan-price{ font-size:1.6rem; font-weight:700; color:var(--text); margin:0 0 14px; }
+.gm-plan-price span{ font-size:.75rem; color:var(--muted); font-weight:500; }
+.gm-plan ul{ list-style:none; margin:0 0 18px; padding:0; display:flex; flex-direction:column; gap:9px; flex:1; }
+.gm-plan li{ font-size:13.5px; color:var(--muted); padding-left:22px; position:relative; line-height:1.4; }
+.gm-plan li::before{ content:"✓"; position:absolute; left:0; color:var(--good); font-weight:700; }
+.gm-plan-featured{
+  border-color:var(--brilliant); position:relative;
+  background:linear-gradient(160deg, rgba(201,163,78,.14), rgba(21,19,16,.5));
+  box-shadow:0 10px 30px rgba(201,163,78,.15);
+}
+.gm-plan-featured li::before{ color:var(--brilliant); }
+.gm-plan-tag{
+  position:absolute; top:-11px; left:50%; transform:translateX(-50%);
+  background:var(--brilliant); color:#241d10; font-size:10.5px; font-weight:700;
+  padding:3px 12px; border-radius:999px; letter-spacing:.03em; white-space:nowrap;
+}
+
+@media (max-width:640px){
+  .gm-plans{ grid-template-columns:1fr; }
+}
+@media (max-width:480px){
+  .gm-auth-bar{ top:10px; right:10px; }
+  .gm-user-box{ padding:5px 6px 5px 10px; gap:6px; }
+  .gm-user-name{ font-size:12.5px; }
+  .gm-auth-btn{ padding:8px 14px; font-size:13px; }
+  .gm-auth-btn-ghost{ font-size:11px; padding:5px 10px; }
+  .gm-modal{ padding:26px 18px; border-radius:14px; }
+  .gm-modal-title, .gm-pricing-modal #gmPricingTitle{ font-size:1.2rem; }
+}
+
+/* ================================================================
+   Informe Completo de Partida
+   Tema dedicado: fondo #1e1e1e / acento dorado #d4af37 (según pedido)
+   ================================================================ */
+:root{
+  --gm-report-bg:#1e1e1e;
+  --gm-report-gold:#d4af37;
+}
+.gm-report-modal{
+  max-width:760px;
+  max-height:88vh;
+  overflow-y:auto;
+  background:rgba(30,30,30,.94);
+  border:1px solid rgba(212,175,55,.25);
+  box-shadow:0 30px 90px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.04);
+}
+.gm-report-modal::-webkit-scrollbar{ width:8px; }
+.gm-report-modal::-webkit-scrollbar-track{ background:transparent; }
+.gm-report-modal::-webkit-scrollbar-thumb{ background:rgba(212,175,55,.35); border-radius:8px; }
+.gm-report-modal #gmReportTitle{ color:var(--gm-report-gold); }
+
+.gm-report-section{ margin-bottom:26px; }
+.gm-report-section:last-child{ margin-bottom:4px; }
+.gm-report-section h3{
+  margin:0 0 14px; font-size:1.05rem; color:var(--gm-report-gold);
+  display:flex; align-items:center; gap:8px; font-family:'Fraunces', serif;
+}
+
+.gm-report-accuracy-row{ display:flex; gap:14px; flex-wrap:wrap; margin-bottom:14px; }
+.gm-acc-card{
+  flex:1; min-width:140px; background:rgba(255,255,255,.03);
+  border:1px solid rgba(212,175,55,.18); border-radius:12px; padding:16px;
+  text-align:center;
+}
+.gm-acc-card .gm-acc-label{ font-size:12.5px; color:#a8a8a8; margin-bottom:6px; }
+.gm-acc-card .gm-acc-value{ font-size:1.7rem; font-weight:700; color:var(--gm-report-gold); }
+.gm-acc-card.black .gm-acc-value{ color:#e9e0c8; }
+
+.gm-cat-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+.gm-cat-chip{
+  background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.08);
+  border-radius:10px; padding:10px 8px; text-align:center;
+}
+.gm-cat-chip .gm-cat-icon{ font-size:1.15rem; display:block; margin-bottom:4px; }
+.gm-cat-chip .gm-cat-count{ font-size:1.25rem; font-weight:700; color:#fff; display:block; }
+.gm-cat-chip .gm-cat-name{ font-size:10px; color:#999; text-transform:uppercase; letter-spacing:.03em; }
+
+.gm-opening-name{ font-size:1.1rem; font-weight:700; color:#fff; margin:0 0 8px; }
+.gm-opening-moves{
+  font-family:'IBM Plex Mono', monospace; font-size:13px; color:#c9c9c9;
+  background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.06);
+  border-radius:8px; padding:10px 12px; line-height:1.6; word-break:break-word;
+}
+
+.gm-critical-box{
+  background:rgba(212,175,55,.08); border:1px solid rgba(212,175,55,.3);
+  border-radius:12px; padding:16px; font-size:14px; line-height:1.6; color:#eee;
+}
+.gm-critical-box b{ color:var(--gm-report-gold); }
+
+.gm-chart-wrap{
+  position:relative; width:100%; height:220px;
+  background:rgba(255,255,255,.02); border:1px solid rgba(255,255,255,.08);
+  border-radius:12px; padding:8px; box-sizing:border-box;
+}
+#gmEvalChartCanvas{ width:100%; height:100%; display:block; }
+.gm-chart-tooltip{
+  position:absolute; pointer-events:none; z-index:5;
+  background:#000; color:#fff; font-size:11.5px; padding:4px 9px;
+  border-radius:6px; border:1px solid var(--gm-report-gold);
+  transform:translate(-50%,-125%); white-space:nowrap; opacity:0; transition:opacity .1s;
+}
+
+@media (max-width:640px){
+  .gm-cat-grid{ grid-template-columns:repeat(2,1fr); }
+  .gm-report-accuracy-row{ flex-direction:column; }
+  .gm-chart-wrap{ height:180px; }
+  .gm-report-modal{ padding:22px 16px; }
+}
+
+/* ================================================================
+   Modo "Entrena tus errores"
+   Mismo tema dedicado: fondo #1e1e1e / acento dorado #d4af37.
+   El mini-tablero reutiliza las clases .sq/.piece-w/.piece-b/.light/.dark
+   ya definidas para el tablero principal, así que hereda su mismo estilo.
+   ================================================================ */
+.gm-train-modal{
+  max-width:480px;
+  background:rgba(30,30,30,.95);
+  border:1px solid rgba(212,175,55,.25);
+  box-shadow:0 30px 90px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.04);
+}
+.gm-train-heading{
+  margin:0 0 16px; text-align:center; font-family:'Fraunces', serif;
+  font-size:1.3rem; color:var(--gm-report-gold);
+}
+.gm-train-progress{
+  display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;
+  font-size:12.5px; color:#a8a8a8; margin-bottom:10px;
+}
+.gm-train-progress span:last-child{ color:var(--gm-report-gold); font-weight:600; }
+.gm-train-turn{
+  text-align:center; margin:0 0 12px; font-size:14px; color:#eee; font-weight:600;
+}
+.gm-train-board-wrap{ display:flex; justify-content:center; margin-bottom:14px; }
+.gm-train-board{
+  display:grid;
+  grid-template-columns:repeat(8,1fr);
+  grid-template-rows:repeat(8,1fr);
+  width:min(340px,80vw);
+  aspect-ratio:1/1;
+  border:3px solid #4a3d29;
+  border-radius:4px;
+  overflow:hidden;
+  box-shadow:0 10px 26px rgba(0,0,0,.5);
+}
+.gm-train-board .sq{ font-size:clamp(20px,7vw,34px); }
+.gm-train-feedback{
+  min-height:1.4em; font-size:13.5px; line-height:1.55; text-align:center;
+  color:#eee; margin-bottom:14px; padding:0 4px;
+}
+.gm-train-feedback.ok{ color:#7ee787; }
+.gm-train-feedback.err{ color:#ff8a8a; }
+.gm-train-feedback b{ color:var(--gm-report-gold); }
+.gm-train-actions{ display:flex; justify-content:center; gap:10px; flex-wrap:wrap; }
+.gm-train-actions .gm-btn-primary{ flex:1; max-width:280px; }
+.gm-btn-secondary{
+  flex:1; max-width:200px; padding:12px 16px; border-radius:10px;
+  background:transparent; border:1px solid var(--gm-report-gold); color:var(--gm-report-gold);
+  font-weight:700; font-size:14.5px; font-family:inherit; cursor:pointer;
+  transition:background .12s, transform .12s;
+}
+.gm-btn-secondary:hover{ background:rgba(212,175,55,.12); transform:translateY(-1px); }
+
+@media (max-width:480px){
+  .gm-train-modal{ padding:22px 16px; }
+  .gm-train-progress{ font-size:11.5px; }
+}
 </style>
+<!-- Scripts de Firebase (DEBEN ir antes de cualquier otro script que use Firebase).
+     Usamos cdnjs.cloudflare.com en vez de www.gstatic.com/firebasejs: varios
+     bloqueadores de anuncios/privacidad (uBlock, Brave, AdGuard...) filtran
+     gstatic.com por su asociación con Google Analytics, y eso impedía que
+     `firebase` llegara a existir. cdnjs es el mismo CDN del que ya carga
+     chess.js más abajo, así que sabemos que no está bloqueado aquí.
+     NOTA: NO se incluye firebase-analytics-compat.js a propósito. Analytics
+     hace un handshake por postMessage con un iframe de Google que, con
+     ciertos bloqueadores de anuncios/privacidad, revienta con
+     "DataCloneError: Headers object could not be cloned". Analytics no
+     tiene nada que ver con el login (Auth) ni con Firestore, así que
+     quitarlo elimina el error de raíz sin perder ninguna función real. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.0/firebase-app-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.0/firebase-auth-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.0/firebase-firestore-compat.min.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -313,6 +628,8 @@
           <button id="btnNext" title="Adelante">▶</button>
           <button id="btnEnd" title="Final">⏭</button>
           <button id="btnReset" title="Empezar de nuevo">Empezar de nuevo</button>
+          <button id="btnGmReport" title="Informe completo de la partida">📊 Informe completo</button>
+          <button id="btnTrainMistakes" title="Entrena tus errores" class="primary">🎯 Entrenar mis errores</button>
         </div>
       </div>
 
@@ -390,6 +707,921 @@
 <script>
 (function(){
   "use strict";
+
+  /* ================================================================
+     Sistema de Cuentas + Freemium/Pricing (Gran Maestro de Bolsillo)
+     AHORA CON FIREBASE REAL (Authentication + Firestore) en vez de
+     localStorage simulado:
+       - firebase.auth()        -> login/registro reales (email + contraseña).
+       - Firestore, colección "usuarios/{uid}" -> {nombre, email, premium,
+         analysisCount}, la fuente de verdad para el estado de cada cuenta.
+     `gmCurrentUser` (objeto de Firebase Auth) y `gmCurrentUserData` (el
+     documento de Firestore, cacheado en memoria) reflejan siempre el
+     estado real; se mantienen sincronizados por onAuthStateChanged.
+     El contador SOLO sube cuando el motor de verdad empieza a procesar
+     una partida completa (guard dentro de loadPgnString), nunca por
+     mover piezas sueltas en el tablero — esa regla de negocio no cambió,
+     solo cambió DÓNDE vive el dato.
+     ================================================================ */
+  const firebaseConfig = {
+    apiKey: "AIzaSyCW1LXZxEjJUXOQglzB5h3lZ2-LNeK_zyI",
+    authDomain: "gran-maestro-bolsillo.firebaseapp.com",
+    projectId: "gran-maestro-bolsillo",
+    storageBucket: "gran-maestro-bolsillo.firebasestorage.app",
+    messagingSenderId: "223488475543",
+    appId: "1:223488475543:web:9191002653460c7f9f84d2",
+    measurementId: "G-QJTKMM3QPH"
+  };
+
+  // Si los <script> de Firebase no llegaron a cargar (sin conexión, un
+  // bloqueador de anuncios que filtra "firebase", el archivo abierto como
+  // file:// en un navegador que restringe scripts externos, etc.),
+  // `firebase` no existe y NO debe tumbar el resto de la app — el tablero
+  // y el motor deben seguir funcionando igual, solo sin cuentas.
+  let gmAuth = null;
+  let gmDb = null;
+  let gmFirebaseReady = false;
+  try{
+    if(typeof firebase === 'undefined'){
+      throw new Error('El SDK de Firebase no se cargó. Revisa tu conexión a internet o si un bloqueador de anuncios está filtrando cdnjs.cloudflare.com.');
+    }
+    firebase.initializeApp(firebaseConfig);
+    gmAuth = firebase.auth();
+    gmDb = firebase.firestore();
+    gmFirebaseReady = true;
+    // Nota: a propósito NO se llama a firebase.analytics() aquí. Ver el
+    // comentario junto a los <script> de Firebase en el <head> — Analytics
+    // no aporta nada al login/Firestore y es la causa del
+    // "DataCloneError: Headers object could not be cloned" con ciertos
+    // bloqueadores de anuncios/privacidad.
+  }catch(err){
+    console.error('Firebase no está disponible, la app sigue funcionando sin cuentas:', err.message);
+  }
+
+  const GM_FREE_LIMIT = 3;
+  const GM_USERS_COLLECTION = 'usuarios';
+
+  // Estado de sesión en memoria, siempre sincronizado por onAuthStateChanged
+  // (ver más abajo). Mientras gmCurrentUser sea null, no hay sesión.
+  let gmCurrentUser = null;      // objeto User de Firebase Auth (uid, email...)
+  let gmCurrentUserData = null;  // documento de Firestore: {nombre, premium, analysisCount}
+
+  /* ---------- Traducción de errores de Firebase a mensajes en español ---------- */
+  function gmAuthErrorMessage(err, context){
+    const code = err && err.code;
+    if(context === 'register'){
+      if(code === 'auth/email-already-in-use') return 'Ya existe una cuenta con ese email.';
+      if(code === 'auth/invalid-email') return 'Ese email no es válido.';
+      if(code === 'auth/weak-password') return 'La contraseña debe tener al menos 6 caracteres.';
+    } else {
+      if(code === 'auth/user-not-found') return 'Esa cuenta no existe. Revisa el email o regístrate primero.';
+      if(code === 'auth/wrong-password') return 'La contraseña es incorrecta. Inténtalo de nuevo.';
+      if(code === 'auth/invalid-email') return 'Ese email no es válido.';
+      if(code === 'auth/too-many-requests') return 'Demasiados intentos. Espera un momento y vuelve a intentar.';
+      // Firebase moderno unifica "usuario no existe" y "contraseña incorrecta"
+      // en un solo código (auth/invalid-credential) para no revelar cuál de
+      // los dos falló, por seguridad. En ese caso no podemos distinguirlos.
+      if(code === 'auth/invalid-credential') return 'Email o contraseña incorrectos.';
+    }
+    return (err && err.message) ? err.message : 'Ocurrió un error. Inténtalo de nuevo.';
+  }
+
+  /* ---------- Registro / Login / Logout (Firebase Auth + Firestore) ---------- */
+  async function gmRegister(nombre, email, password){
+    if(!gmFirebaseReady){
+      return { ok:false, msg:'El registro no está disponible ahora mismo (no se pudo conectar con el servicio de cuentas). Revisa tu conexión e inténtalo de nuevo.' };
+    }
+    try{
+      const cred = await gmAuth.createUserWithEmailAndPassword(email.trim(), password);
+      const userData = { nombre: nombre.trim(), email: cred.user.email, premium:false, analysisCount:0 };
+      await gmDb.collection(GM_USERS_COLLECTION).doc(cred.user.uid).set(userData);
+      // onAuthStateChanged se dispara solo y carga gmCurrentUser/gmCurrentUserData,
+      // pero los fijamos también aquí para que la UI reaccione sin esperar esa vuelta.
+      gmCurrentUser = cred.user;
+      gmCurrentUserData = userData;
+      return { ok:true };
+    }catch(err){
+      return { ok:false, msg: gmAuthErrorMessage(err, 'register') };
+    }
+  }
+  async function gmLogin(email, password){
+    if(!gmFirebaseReady){
+      return { ok:false, msg:'El inicio de sesión no está disponible ahora mismo (no se pudo conectar con el servicio de cuentas). Revisa tu conexión e inténtalo de nuevo.' };
+    }
+    try{
+      const cred = await gmAuth.signInWithEmailAndPassword(email.trim(), password);
+      gmCurrentUser = cred.user;
+      gmCurrentUserData = await gmFetchUserData(cred.user);
+      return { ok:true };
+    }catch(err){
+      return { ok:false, msg: gmAuthErrorMessage(err, 'login') };
+    }
+  }
+  function gmLogout(){
+    if(!gmFirebaseReady) return;
+    gmAuth.signOut();
+    // gmCurrentUser/gmCurrentUserData se limpian en onAuthStateChanged.
+  }
+
+  // Lee el documento de Firestore del usuario; si por algún motivo no existe
+  // (por ejemplo, una cuenta creada antes de tener esta colección) lo crea
+  // con valores por defecto en vez de romper el login.
+  async function gmFetchUserData(user){
+    const ref = gmDb.collection(GM_USERS_COLLECTION).doc(user.uid);
+    const snap = await ref.get();
+    if(snap.exists) return Object.assign({}, snap.data());
+    const fallback = { nombre: (user.email || 'Jugador').split('@')[0], email:user.email, premium:false, analysisCount:0 };
+    await ref.set(fallback);
+    return fallback;
+  }
+
+  // Firebase Auth es la fuente de verdad para "quién está conectado": esto
+  // corre solo al cargar la página, al iniciar sesión, al cerrar sesión, o
+  // si la sesión expira/se revoca en otra pestaña. Si Firebase no cargó,
+  // sencillamente no hay sesión posible — el resto de la app sigue igual.
+  if(gmFirebaseReady){
+    gmAuth.onAuthStateChanged(async (user)=>{
+      if(user){
+        gmCurrentUser = user;
+        try{
+          gmCurrentUserData = await gmFetchUserData(user);
+        }catch(err){
+          console.error('No se pudo leer el perfil de Firestore:', err);
+          gmCurrentUserData = { nombre:user.email, premium:false, analysisCount:0 };
+        }
+      } else {
+        gmCurrentUser = null;
+        gmCurrentUserData = null;
+      }
+      gmUpdateAuthUI();
+    });
+  }
+
+  /* ---------- Reglas Freemium ---------- */
+  function gmIsPremium(){
+    return !!(gmCurrentUserData && gmCurrentUserData.premium === true);
+  }
+  function gmGetCount(){
+    return (gmCurrentUserData && gmCurrentUserData.analysisCount) || 0;
+  }
+  // Sube el contador local al instante (para que la UI no espere a la red) y
+  // lo persiste en Firestore en segundo plano.
+  function gmIncrementCount(){
+    if(!gmFirebaseReady || !gmCurrentUser || !gmCurrentUserData) return;
+    gmCurrentUserData.analysisCount = gmGetCount() + 1;
+    gmDb.collection(GM_USERS_COLLECTION).doc(gmCurrentUser.uid)
+      .update({ analysisCount: firebase.firestore.FieldValue.increment(1) })
+      .catch(err=> console.error('No se pudo actualizar analysisCount en Firestore:', err));
+  }
+  // true  -> el análisis puede continuar (si correspondía, ya contó el uso).
+  // false -> debe bloquearse (ya se abrió el modal correspondiente: login o precios).
+  function gmTryStartAnalysis(){
+    // Si Firebase no está disponible no hay forma de exigir cuenta ni de
+    // llevar la cuenta de análisis gratis — se deja pasar el análisis para
+    // no bloquear el tablero por un problema ajeno al ajedrez en sí.
+    if(!gmFirebaseReady) return true;
+    if(!gmCurrentUser){
+      gmOpenAuthModal('login');
+      return false;
+    }
+    if(gmIsPremium()) return true;
+    if(gmGetCount() < GM_FREE_LIMIT){
+      gmIncrementCount();
+      return true;
+    }
+    gmOpenPricingModal();
+    return false;
+  }
+
+  /* ---------- Apertura/cierre de modales con animación ---------- */
+  function gmOpenModal(overlay){
+    if(!overlay) return;
+    overlay.classList.remove('gm-closing');
+    overlay.classList.add('gm-open');
+    document.body.style.overflow = 'hidden';
+    const firstInput = overlay.querySelector('input');
+    if(firstInput) setTimeout(()=>firstInput.focus(), 50);
+  }
+  function gmCloseModal(overlay){
+    if(!overlay || !overlay.classList.contains('gm-open')) return;
+    overlay.classList.add('gm-closing');
+    document.body.style.overflow = '';
+    setTimeout(()=>{ overlay.classList.remove('gm-open','gm-closing'); }, 180);
+  }
+
+  function gmOpenAuthModal(tab){
+    gmSwitchAuthTab(tab || 'login');
+    gmOpenModal(document.getElementById('authModal'));
+  }
+  function gmOpenPricingModal(){
+    gmOpenModal(document.getElementById('pricingModal'));
+  }
+
+  function gmSwitchAuthTab(tab){
+    document.querySelectorAll('.gm-tab').forEach(b=>{
+      b.classList.toggle('active', b.dataset.authtab === tab);
+    });
+    document.getElementById('gmLoginForm').hidden = tab !== 'login';
+    document.getElementById('gmRegisterForm').hidden = tab !== 'register';
+    const msgEl = document.getElementById('gmAuthMsg');
+    if(msgEl){ msgEl.textContent=''; msgEl.className='gm-form-msg'; }
+  }
+
+  /* ---------- Barra de usuario (esquina superior derecha) ---------- */
+  function gmUpdateAuthUI(){
+    const loginBtn = document.getElementById('gmLoginBtn');
+    const userBox = document.getElementById('gmUserBox');
+    const userName = document.getElementById('gmUserName');
+    const badge = document.getElementById('gmUserBadge');
+    const premiumBtn = document.getElementById('gmPremiumMenuBtn');
+    if(!loginBtn || !userBox) return;
+
+    if(gmCurrentUser && gmCurrentUserData){
+      loginBtn.hidden = true;
+      userBox.hidden = false;
+      userName.textContent = gmCurrentUserData.nombre || gmCurrentUser.email;
+      badge.hidden = gmCurrentUserData.premium !== true;
+      premiumBtn.hidden = gmCurrentUserData.premium === true;
+    } else {
+      loginBtn.hidden = false;
+      userBox.hidden = true;
+    }
+  }
+
+  /* Activa/desactiva un botón de submit mientras espera la respuesta de
+     Firebase (login/registro son ahora llamadas de red, ya no son
+     instantáneas como con localStorage). */
+  function gmSetFormBusy(button, busyText){
+    if(!button) return ()=>{};
+    const original = button.textContent;
+    button.disabled = true;
+    button.textContent = busyText;
+    return ()=>{ button.disabled = false; button.textContent = original; };
+  }
+
+  /* ---------- Conexión de toda la UI ---------- */
+  function gmSetupAccountUI(){
+    if(gmSetupAccountUI._done) return; // evita registrar los listeners dos veces
+    gmSetupAccountUI._done = true;
+
+    const loginBtn = document.getElementById('gmLoginBtn');
+    const logoutBtn = document.getElementById('gmLogoutBtn');
+    const premiumMenuBtn = document.getElementById('gmPremiumMenuBtn');
+    const authOverlay = document.getElementById('authModal');
+    const authCloseBtn = document.getElementById('gmAuthCloseBtn');
+    const pricingOverlay = document.getElementById('pricingModal');
+    const pricingCloseBtn = document.getElementById('gmPricingCloseBtn');
+    const loginForm = document.getElementById('gmLoginForm');
+    const registerForm = document.getElementById('gmRegisterForm');
+    const subscribeBtn = document.getElementById('gmSubscribeBtn');
+    const authMsg = document.getElementById('gmAuthMsg');
+
+    if(!loginBtn || !authOverlay || !pricingOverlay) return; // HTML aún no listo
+
+    loginBtn.addEventListener('click', ()=> gmOpenAuthModal('login'));
+    logoutBtn.addEventListener('click', gmLogout);
+    premiumMenuBtn.addEventListener('click', gmOpenPricingModal);
+
+    document.querySelectorAll('.gm-tab').forEach(tabBtn=>{
+      tabBtn.addEventListener('click', ()=> gmSwitchAuthTab(tabBtn.dataset.authtab));
+    });
+
+    authCloseBtn.addEventListener('click', ()=> gmCloseModal(authOverlay));
+    pricingCloseBtn.addEventListener('click', ()=> gmCloseModal(pricingOverlay));
+    [authOverlay, pricingOverlay].forEach(overlay=>{
+      overlay.addEventListener('click', (e)=>{ if(e.target === overlay) gmCloseModal(overlay); });
+    });
+    document.addEventListener('keydown', (e)=>{
+      if(e.key !== 'Escape') return;
+      if(authOverlay.classList.contains('gm-open')) gmCloseModal(authOverlay);
+      if(pricingOverlay.classList.contains('gm-open')) gmCloseModal(pricingOverlay);
+    });
+
+    loginForm.addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const email = document.getElementById('loginEmail').value;
+      const password = document.getElementById('loginPassword').value;
+      const submitBtn = loginForm.querySelector('button[type="submit"]');
+      const restore = gmSetFormBusy(submitBtn, 'Conectando...');
+      const res = await gmLogin(email, password);
+      restore();
+      if(res.ok){
+        authMsg.textContent = '¡Bienvenido de nuevo!';
+        authMsg.className = 'gm-form-msg ok';
+        gmUpdateAuthUI();
+        setTimeout(()=> gmCloseModal(authOverlay), 500);
+        loginForm.reset();
+      } else {
+        authMsg.textContent = res.msg;
+        authMsg.className = 'gm-form-msg err';
+      }
+    });
+
+    registerForm.addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const nombre = document.getElementById('registerName').value;
+      const email = document.getElementById('registerEmail').value;
+      const password = document.getElementById('registerPassword').value;
+      if(!nombre.trim() || !email.trim() || password.length < 6){
+        authMsg.textContent = 'Completa todos los campos (Firebase exige contraseña de al menos 6 caracteres).';
+        authMsg.className = 'gm-form-msg err';
+        return;
+      }
+      const submitBtn = registerForm.querySelector('button[type="submit"]');
+      const restore = gmSetFormBusy(submitBtn, 'Creando cuenta...');
+      const res = await gmRegister(nombre, email, password);
+      restore();
+      if(res.ok){
+        authMsg.textContent = '¡Cuenta creada! Ya tienes sesión iniciada.';
+        authMsg.className = 'gm-form-msg ok';
+        gmUpdateAuthUI();
+        setTimeout(()=> gmCloseModal(authOverlay), 500);
+        registerForm.reset();
+      } else {
+        authMsg.textContent = res.msg;
+        authMsg.className = 'gm-form-msg err';
+      }
+    });
+
+    subscribeBtn.addEventListener('click', (e)=>{
+      e.preventDefault();
+      alert('Integración de pagos próximamente 🚀');
+    });
+
+    gmUpdateAuthUI();
+  }
+  document.addEventListener('DOMContentLoaded', gmSetupAccountUI);
+  // Por si el script corre después de que el DOM ya cargó.
+  if(document.readyState === 'interactive' || document.readyState === 'complete'){
+    gmSetupAccountUI();
+  }
+
+
+  /* ================================================================
+     Informe Completo de Partida (Gran Maestro de Bolsillo)
+     Se muestra automáticamente al terminar de analizar una partida
+     completa (ver el hook dentro de loadFromSanAsync). Usa los mismos
+     datos ya calculados por el motor (history[].class) — no vuelve a
+     analizar nada ni toca la lógica de clasificación existente.
+     ================================================================ */
+
+  /* Base de nombres de apertura (líneas de teoría clásica). Nota honesta,
+     igual que con BOOK_LINES más arriba: es una lista curada, no una base
+     ECO completa; si no hay coincidencia se muestra "no identificada" y
+     aun así se listan las primeras jugadas. */
+  const OPENING_BOOK = [
+    { name:'Apertura Italiana', moves:'e4 e5 Nf3 Nc6 Bc4'.split(' ') },
+    { name:'Apertura Italiana - Giuoco Piano', moves:'e4 e5 Nf3 Nc6 Bc4 Bc5'.split(' ') },
+    { name:'Defensa de los Dos Caballos', moves:'e4 e5 Nf3 Nc6 Bc4 Nf6'.split(' ') },
+    { name:'Apertura Española (Ruy López)', moves:'e4 e5 Nf3 Nc6 Bb5'.split(' ') },
+    { name:'Apertura Española - Variante Cerrada', moves:'e4 e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6 O-O Be7'.split(' ') },
+    { name:'Apertura Española - Berlinesa', moves:'e4 e5 Nf3 Nc6 Bb5 Nf6'.split(' ') },
+    { name:'Apertura Española - Variante de Cambio', moves:'e4 e5 Nf3 Nc6 Bb5 a6 Bxc6'.split(' ') },
+    { name:'Apertura Escocesa', moves:'e4 e5 Nf3 Nc6 d4'.split(' ') },
+    { name:'Apertura Vienesa', moves:'e4 e5 Nc3'.split(' ') },
+    { name:'Defensa Petrov (Rusa)', moves:'e4 e5 Nf3 Nf6'.split(' ') },
+    { name:'Partida de los Cuatro Caballos', moves:'e4 e5 Nf3 Nc6 Nc3 Nf6'.split(' ') },
+    { name:'Defensa Siciliana', moves:'e4 c5'.split(' ') },
+    { name:'Defensa Siciliana - Variante Najdorf', moves:'e4 c5 Nf3 d6 d4 cxd4 Nxd4 Nf6 Nc3 a6'.split(' ') },
+    { name:'Defensa Siciliana - Ataque Inglés (Najdorf)', moves:'e4 c5 Nf3 d6 d4 cxd4 Nxd4 Nf6 Nc3 a6 Be3'.split(' ') },
+    { name:'Defensa Siciliana - Dragón', moves:'e4 c5 Nf3 d6 d4 cxd4 Nxd4 Nf6 Nc3 g6'.split(' ') },
+    { name:'Defensa Siciliana - Clásica', moves:'e4 c5 Nf3 Nc6 d4 cxd4 Nxd4 Nf6'.split(' ') },
+    { name:'Defensa Siciliana - Variante Sveshnikov', moves:'e4 c5 Nf3 Nc6 d4 cxd4 Nxd4 Nf6 Nc3 e5'.split(' ') },
+    { name:'Defensa Siciliana - Alapin', moves:'e4 c5 c3'.split(' ') },
+    { name:'Defensa Siciliana - Cerrada', moves:'e4 c5 Nc3'.split(' ') },
+    { name:'Defensa Francesa', moves:'e4 e6'.split(' ') },
+    { name:'Defensa Francesa - Avance', moves:'e4 e6 d4 d5 e5'.split(' ') },
+    { name:'Defensa Francesa - Variante Winawer', moves:'e4 e6 d4 d5 Nc3 Bb4'.split(' ') },
+    { name:'Defensa Caro-Kann', moves:'e4 c6'.split(' ') },
+    { name:'Defensa Caro-Kann - Variante Clásica', moves:'e4 c6 d4 d5 Nc3 dxe4 Nxe4 Bf5'.split(' ') },
+    { name:'Defensa Escandinava', moves:'e4 d5'.split(' ') },
+    { name:'Defensa Pirc', moves:'e4 d6 d4 Nf6 Nc3 g6'.split(' ') },
+    { name:'Defensa Moderna', moves:'e4 g6'.split(' ') },
+    { name:'Defensa Alekhine', moves:'e4 Nf6'.split(' ') },
+    { name:'Gambito de Dama', moves:'d4 d5 c4'.split(' ') },
+    { name:'Gambito de Dama Aceptado', moves:'d4 d5 c4 dxc4'.split(' ') },
+    { name:'Gambito de Dama Rehusado', moves:'d4 d5 c4 e6'.split(' ') },
+    { name:'Defensa Eslava', moves:'d4 d5 c4 c6'.split(' ') },
+    { name:'Defensa India de Rey', moves:'d4 Nf6 c4 g6'.split(' ') },
+    { name:'Defensa Grünfeld', moves:'d4 Nf6 c4 g6 Nc3 d5'.split(' ') },
+    { name:'Defensa Nimzoindia', moves:'d4 Nf6 c4 e6 Nc3 Bb4'.split(' ') },
+    { name:'Apertura Catalana', moves:'d4 Nf6 c4 e6 g3'.split(' ') },
+    { name:'Defensa Reina India', moves:'d4 Nf6 c4 e6 Nf3 b6'.split(' ') },
+    { name:'Defensa Bogoindia', moves:'d4 Nf6 c4 e6 Nf3 Bb4+'.split(' ') },
+    { name:'Defensa Benoni', moves:'d4 Nf6 c4 c5'.split(' ') },
+    { name:'Defensa Holandesa', moves:'d4 f5'.split(' ') },
+    { name:'Sistema Londres', moves:'d4 d5 Nf3'.split(' ') },
+    { name:'Apertura Réti', moves:'Nf3 d5 c4'.split(' ') },
+    { name:'Apertura Inglesa', moves:'c4'.split(' ') }
+  ];
+
+  // Últimos puntos dibujados en el gráfico (para el tooltip al pasar el mouse)
+  // y última curva calculada (para poder redibujar si cambia el tamaño de ventana).
+  let gmLastReportEvals = [];
+  let gmLastChartPoints = [];
+
+  function gmDetectOpening(sanClean){
+    let best = null;
+    for(const op of OPENING_BOOK){
+      if(op.moves.length > sanClean.length) continue;
+      let match = true;
+      for(let i=0;i<op.moves.length;i++){
+        if(op.moves[i] !== sanClean[i]){ match = false; break; }
+      }
+      if(match && (!best || op.moves.length > best.moves.length)) best = op;
+    }
+    return best;
+  }
+
+  function gmFormatOpeningMoves(entries, maxHalfMoves){
+    const shown = Math.min(maxHalfMoves, entries.length);
+    let out = '';
+    for(let i=0;i<shown;i++){
+      if(i % 2 === 0) out += (i/2 + 1) + '. ';
+      out += entries[i].san + ' ';
+    }
+    return out.trim();
+  }
+
+  // Jugada con mayor cambio de evaluación de un movimiento al siguiente
+  // (comparando evalAfter en perspectiva de blancas, ya en unidades de peón).
+  function gmFindCriticalMoment(entries){
+    let idx = -1, from = 0, to = 0, delta = 0;
+    let prev = 0; // eval de la posición inicial ≈ 0.00
+    entries.forEach((e, i)=>{
+      const cur = e.class.evalAfter;
+      const d = cur - prev;
+      if(Math.abs(d) > Math.abs(delta)){
+        delta = d; idx = i; from = prev; to = cur;
+      }
+      prev = cur;
+    });
+    return idx === -1 ? null : { idx, from, to, delta, entry: entries[idx] };
+  }
+
+  function gmDrawEvalChart(canvas, evals){
+    gmLastChartPoints = [];
+    if(!canvas || !evals || evals.length < 2) return;
+    const dpr = window.devicePixelRatio || 1;
+    const wrap = canvas.parentElement;
+    const w = Math.max(260, (wrap && wrap.clientWidth) || canvas.clientWidth || 320);
+    const h = Math.max(160, (wrap && wrap.clientHeight) || 220);
+    canvas.width = Math.round(w*dpr);
+    canvas.height = Math.round(h*dpr);
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+    const ctx = canvas.getContext('2d');
+    if(!ctx) return;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.clearRect(0,0,w,h);
+
+    const maxAbs = Math.max(1, ...evals.map(v=>Math.abs(v)));
+    const CAP = Math.min(12, Math.max(2, Math.ceil(maxAbs)));
+    const clamped = evals.map(v=>Math.max(-CAP, Math.min(CAP, v)));
+
+    const padL=36, padR=10, padT=10, padB=22;
+    const plotW = w-padL-padR, plotH = h-padT-padB;
+    const n = clamped.length;
+    const xAt = i => padL + (n<=1 ? 0 : (i/(n-1))*plotW);
+    const yAt = v => padT + (1-(v+CAP)/(2*CAP))*plotH;
+
+    // Líneas de referencia horizontales
+    ctx.font = '11px "IBM Plex Sans", sans-serif';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    [CAP, CAP/2, 0, -CAP/2, -CAP].forEach(v=>{
+      const y = yAt(v);
+      ctx.strokeStyle = v===0 ? 'rgba(212,175,55,.55)' : 'rgba(255,255,255,.08)';
+      ctx.lineWidth = v===0 ? 1.2 : 1;
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(w-padR, y); ctx.stroke();
+      ctx.fillStyle = '#9a9a9a';
+      ctx.fillText(v===0 ? '0.0' : (v>0?'+':'')+v.toFixed(1), padL-6, y);
+    });
+
+    // Área bajo la curva: dorado por encima de 0 (ventaja blancas),
+    // gris por debajo (ventaja negras).
+    const y0 = yAt(0);
+    ctx.save();
+    ctx.beginPath();
+    clamped.forEach((v,i)=>{ const x=xAt(i), y=yAt(v); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); });
+    ctx.lineTo(xAt(n-1), y0); ctx.lineTo(xAt(0), y0); ctx.closePath();
+    ctx.clip();
+    ctx.fillStyle = 'rgba(212,175,55,.20)';
+    ctx.fillRect(padL, padT, plotW, Math.max(0,y0-padT));
+    ctx.fillStyle = 'rgba(150,150,150,.16)';
+    ctx.fillRect(padL, y0, plotW, Math.max(0,(padT+plotH)-y0));
+    ctx.restore();
+
+    // Línea de evaluación
+    ctx.beginPath();
+    clamped.forEach((v,i)=>{ const x=xAt(i), y=yAt(v); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); });
+    ctx.strokeStyle = '#d4af37';
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+
+    // Eje X: números de jugada
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = '#9a9a9a';
+    const labelCount = Math.min(6, n);
+    for(let k=0;k<labelCount;k++){
+      const i = Math.round(k*(n-1)/Math.max(1,labelCount-1));
+      ctx.fillText(String(i), xAt(i), h-padB+5);
+    }
+
+    // Guarda las coordenadas en píxeles CSS (no en píxeles físicos del canvas)
+    // para poder ubicar el punto más cercano al mouse en el tooltip.
+    gmLastChartPoints = evals.map((v,i)=>({ x:xAt(i), y:yAt(Math.max(-CAP,Math.min(CAP,v))), ply:i, value:v }));
+  }
+
+  function gmHandleChartHover(evt, canvas, tooltip){
+    if(!gmLastChartPoints.length){ tooltip.style.opacity = 0; return; }
+    const rect = canvas.getBoundingClientRect();
+    const mx = evt.clientX - rect.left;
+    let nearest = gmLastChartPoints[0], bestDist = Infinity;
+    for(const p of gmLastChartPoints){
+      const d = Math.abs(p.x - mx);
+      if(d < bestDist){ bestDist = d; nearest = p; }
+    }
+    const sign = v => (v>=0?'+':'')+v.toFixed(2);
+    tooltip.textContent = `Jugada ${nearest.ply}: ${sign(nearest.value)}`;
+    tooltip.style.left = nearest.x + 'px';
+    tooltip.style.top = nearest.y + 'px';
+    tooltip.style.opacity = 1;
+  }
+
+  function gmBuildGameReport(){
+    if(!history || history.length === 0) return;
+
+    // 1) Resumen general: precisión por color + conteo por categoría.
+    const accW = gameAccuracy(e=>e.color==='w');
+    const accB = gameAccuracy(e=>e.color==='b');
+    const accWEl = document.getElementById('gmRepAccWhite');
+    const accBEl = document.getElementById('gmRepAccBlack');
+    if(accWEl) accWEl.textContent = accW==null ? '—' : Math.round(accW)+'%';
+    if(accBEl) accBEl.textContent = accB==null ? '—' : Math.round(accB)+'%';
+
+    const catGrid = document.getElementById('gmRepCatGrid');
+    if(catGrid){
+      catGrid.innerHTML = '';
+      Object.keys(LABEL_ICON).forEach(key=>{
+        const count = history.filter(e=>e.class.label===key).length;
+        if(count === 0) return;
+        const chip = document.createElement('div');
+        chip.className = 'gm-cat-chip';
+        chip.innerHTML = `<span class="gm-cat-icon">${LABEL_ICON[key]}</span>`
+          + `<span class="gm-cat-count">${count}</span>`
+          + `<span class="gm-cat-name">${LABEL_TXT[key]}</span>`;
+        catGrid.appendChild(chip);
+      });
+    }
+
+    // 2) Apertura detectada.
+    const sanClean = history.map(e=>e.san.replace(/[+#]/g,''));
+    const opening = gmDetectOpening(sanClean);
+    const openingNameEl = document.getElementById('gmRepOpeningName');
+    const openingMovesEl = document.getElementById('gmRepOpeningMoves');
+    if(openingNameEl) openingNameEl.textContent = opening ? opening.name : 'Apertura no identificada';
+    if(openingMovesEl) openingMovesEl.textContent = gmFormatOpeningMoves(history, 10);
+
+    // 3) Momento crítico: mayor cambio de evaluación de una jugada a la siguiente.
+    const crit = gmFindCriticalMoment(history);
+    const critEl = document.getElementById('gmRepCritical');
+    if(critEl){
+      if(crit){
+        const sign = v => (v>=0?'+':'')+v.toFixed(2);
+        const who = crit.entry.color==='w' ? 'Blancas' : 'Negras';
+        critEl.innerHTML = `<b>Jugada ${crit.idx+1}: ${crit.entry.san}</b> (${who}) — `
+          + `${LABEL_TXT[crit.entry.class.label]} que cambió la evaluación de `
+          + `<b>${sign(crit.from)}</b> a <b>${sign(crit.to)}</b>.`;
+      } else {
+        critEl.textContent = 'No se detectaron cambios relevantes de evaluación.';
+      }
+    }
+
+    // 4) Gráfico de evaluación a lo largo de toda la partida.
+    // IMPORTANTE: el modal debe estar visible (abierto) ANTES de dibujar el
+    // canvas. Si se dibuja mientras #gmReportOverlay todavía tiene
+    // display:none, su contenedor mide 0x0 y el gráfico se dibuja a un
+    // tamaño interno equivocado (se ve borroso/mal encajado, sobre todo
+    // hacia el final de la curva, que es justo donde se notaba el fallo).
+    gmLastReportEvals = [0, ...history.map(e=>e.class.evalAfter)];
+    gmOpenModal(document.getElementById('gmReportOverlay'));
+    gmDrawEvalChart(document.getElementById('gmEvalChartCanvas'), gmLastReportEvals);
+  }
+
+  function gmSetupReportUI(){
+    if(gmSetupReportUI._done) return; // evita registrar los listeners dos veces
+    gmSetupReportUI._done = true;
+
+    const overlay = document.getElementById('gmReportOverlay');
+    const closeBtn = document.getElementById('gmReportCloseBtn');
+    const canvas = document.getElementById('gmEvalChartCanvas');
+    const tooltip = document.getElementById('gmChartTooltip');
+    const reportBtn = document.getElementById('btnGmReport');
+    if(!overlay || !closeBtn) return;
+
+    // El botón "📊 Informe completo" del tablero: genera el informe sobre
+    // CUALQUIER partida que haya en `history`, ya sea cargada por PGN o
+    // jugada a mano moviendo las piezas (ambos casos usan classify() por
+    // igual, así que no hay diferencia para el informe).
+    if(reportBtn){
+      reportBtn.addEventListener('click', ()=>{
+        if(!history || history.length === 0){
+          alert('Todavía no hay ninguna jugada para generar el informe. Juega algunas jugadas en el tablero o carga una partida primero.');
+          return;
+        }
+        gmBuildGameReport();
+        gmSaveMistakesToTraining(history);
+      });
+    }
+
+    closeBtn.addEventListener('click', ()=> gmCloseModal(overlay));
+    overlay.addEventListener('click', (e)=>{ if(e.target===overlay) gmCloseModal(overlay); });
+    document.addEventListener('keydown', (e)=>{
+      if(e.key==='Escape' && overlay.classList.contains('gm-open')) gmCloseModal(overlay);
+    });
+    window.addEventListener('resize', ()=>{
+      if(overlay.classList.contains('gm-open')){
+        gmDrawEvalChart(canvas, gmLastReportEvals);
+      }
+    });
+    if(canvas && tooltip){
+      canvas.addEventListener('mousemove', (e)=> gmHandleChartHover(e, canvas, tooltip));
+      canvas.addEventListener('mouseleave', ()=>{ tooltip.style.opacity = 0; });
+      canvas.addEventListener('touchstart', (e)=>{
+        if(e.touches && e.touches[0]) gmHandleChartHover(e.touches[0], canvas, tooltip);
+      }, {passive:true});
+    }
+  }
+  document.addEventListener('DOMContentLoaded', gmSetupReportUI);
+  if(document.readyState === 'interactive' || document.readyState === 'complete'){
+    gmSetupReportUI();
+  }
+
+  /* ================================================================
+     Modo "Entrena tus errores" (Gran Maestro de Bolsillo)
+     Reutiliza por completo el motor y chess.js ya existentes:
+       - cachedSearchRoot()/orient()/winPercent() para evaluar la jugada
+         del usuario exactamente igual que classify() lo hace durante el
+         análisis normal (no se duplica ninguna lógica de evaluación).
+       - pieceGlyph() y las mismas clases CSS del tablero principal
+         (.sq/.light/.dark/.piece-w/.piece-b/.selected/.legal) para el
+         mini-tablero, en vez de reinventar el render.
+     Persistencia:
+       - gm_bolsillo_errores      -> posiciones (FEN) donde hubo error/pifia
+       - gm_bolsillo_train_stats  -> {trained, correct} acumulado histórico
+     ================================================================ */
+  const GM_ERRORS_KEY = 'gm_bolsillo_errores';
+  const GM_TRAIN_STATS_KEY = 'gm_bolsillo_train_stats';
+  const GM_ERRORS_MAX = 200;
+
+  let gmTrainQueue = [];
+  let gmTrainIdx = 0;
+  let gmTrainGame = null;
+  let gmTrainSelected = null;
+  let gmTrainAwaitingNext = false;
+
+  function gmGetErrorBank(){
+    try{ return JSON.parse(localStorage.getItem(GM_ERRORS_KEY)) || []; }
+    catch(e){ return []; }
+  }
+  function gmSaveErrorBank(list){ localStorage.setItem(GM_ERRORS_KEY, JSON.stringify(list)); }
+
+  function gmGetTrainStats(){
+    try{ return JSON.parse(localStorage.getItem(GM_TRAIN_STATS_KEY)) || {trained:0, correct:0}; }
+    catch(e){ return {trained:0, correct:0}; }
+  }
+  function gmSaveTrainStats(stats){ localStorage.setItem(GM_TRAIN_STATS_KEY, JSON.stringify(stats)); }
+
+  // Se llama justo después de analizar una partida completa: revisa el
+  // historial recién calculado y guarda las posiciones donde hubo un
+  // "error" o una "pifia" para poder practicarlas después.
+  function gmSaveMistakesToTraining(entries){
+    const mistakes = entries.filter(e => e.class.label==='error' || e.class.label==='pifia');
+    if(mistakes.length===0) return;
+    let bank = gmGetErrorBank();
+    const seen = new Set(bank.map(x=>x.fen));
+    mistakes.forEach(e=>{
+      if(seen.has(e.fenBefore)) return; // evita duplicar la misma posición
+      bank.push({
+        fen: e.fenBefore,
+        color: e.color,
+        playedSan: e.san,
+        label: e.class.label,
+        winDrop: e.class.winDrop || 0,
+        ts: Date.now()
+      });
+      seen.add(e.fenBefore);
+    });
+    if(bank.length > GM_ERRORS_MAX) bank = bank.slice(bank.length - GM_ERRORS_MAX);
+    gmSaveErrorBank(bank);
+  }
+
+  function gmUpdateTrainProgress(){
+    const counter = document.getElementById('gmTrainCounter');
+    const accEl = document.getElementById('gmTrainAccuracy');
+    if(counter) counter.textContent = `Posición ${gmTrainIdx+1} de ${gmTrainQueue.length}`;
+    const stats = gmGetTrainStats();
+    const pct = stats.trained>0 ? Math.round((stats.correct/stats.trained)*100) : 0;
+    if(accEl) accEl.textContent = `${pct}% de aciertos (${stats.correct}/${stats.trained})`;
+  }
+
+  function gmRenderTrainBoard(){
+    const boardEl = document.getElementById('gmTrainBoard');
+    if(!boardEl || !gmTrainGame) return;
+    boardEl.innerHTML = '';
+    const board = gmTrainGame.board();
+    const toMove = gmTrainQueue[gmTrainIdx].color;
+    const flip = toMove === 'b'; // orienta el tablero desde la perspectiva de quien debe mover
+    let legalTargets = [];
+    if(gmTrainSelected){
+      legalTargets = gmTrainGame.moves({square:gmTrainSelected, verbose:true}).map(m=>m.to);
+    }
+    for(let rr=0; rr<8; rr++){
+      for(let cc=0; cc<8; cc++){
+        const r = flip ? 7-rr : rr;
+        const c = flip ? 7-cc : cc;
+        const file = 'abcdefgh'[c];
+        const rank = 8-r;
+        const sqName = file+rank;
+        const p = board[r][c];
+        const div = document.createElement('div');
+        div.className = 'sq ' + (((r+c)%2===0) ? 'light':'dark');
+        if(sqName===gmTrainSelected) div.className += ' selected';
+        if(legalTargets.indexOf(sqName)!==-1) div.className += ' legal' + (p ? ' has-piece':'');
+        if(p){
+          const span = document.createElement('span');
+          span.className = p.color==='w' ? 'piece-w' : 'piece-b';
+          span.textContent = pieceGlyph(p.type, p.color);
+          div.appendChild(span);
+        }
+        if(cc===0){
+          const rankLabel = document.createElement('span');
+          rankLabel.className = 'coord coord-rank';
+          rankLabel.textContent = rank;
+          div.appendChild(rankLabel);
+        }
+        if(rr===7){
+          const fileLabel = document.createElement('span');
+          fileLabel.className = 'coord coord-file';
+          fileLabel.textContent = file;
+          div.appendChild(fileLabel);
+        }
+        div.dataset.sq = sqName;
+        div.addEventListener('click', gmOnTrainSquareClick);
+        boardEl.appendChild(div);
+      }
+    }
+  }
+
+  function gmLoadTrainPosition(){
+    const item = gmTrainQueue[gmTrainIdx];
+    gmTrainGame = new Chess(item.fen);
+    gmTrainSelected = null;
+    gmTrainAwaitingNext = false;
+    const feedback = document.getElementById('gmTrainFeedback');
+    if(feedback){ feedback.innerHTML = ''; feedback.className = 'gm-train-feedback'; }
+    const nextBtn = document.getElementById('gmTrainNextBtn');
+    if(nextBtn) nextBtn.hidden = true;
+    const retryBtn = document.getElementById('gmTrainRetryBtn');
+    if(retryBtn) retryBtn.hidden = true;
+    const turnEl = document.getElementById('gmTrainTurn');
+    if(turnEl) turnEl.textContent = item.color==='w' ? 'Encuentra la mejor jugada para las Blancas' : 'Encuentra la mejor jugada para las Negras';
+    gmUpdateTrainProgress();
+    gmRenderTrainBoard();
+  }
+
+  function gmOnTrainSquareClick(e){
+    if(gmTrainAwaitingNext || !gmTrainGame) return;
+    const sq = e.currentTarget.dataset.sq;
+    const piece = gmTrainGame.get(sq);
+    const toMove = gmTrainQueue[gmTrainIdx].color;
+    if(gmTrainSelected){
+      const legal = gmTrainGame.moves({square:gmTrainSelected, verbose:true});
+      const target = legal.find(m=>m.to===sq);
+      if(target){
+        gmSubmitTrainMove(gmTrainSelected, sq, target.promotion ? 'q' : undefined);
+        return;
+      }
+    }
+    gmTrainSelected = (piece && piece.color===toMove) ? sq : null;
+    gmRenderTrainBoard();
+  }
+
+  // Evalúa la jugada del usuario con el MISMO motor que usa classify() para
+  // el análisis normal: busca la mejor jugada en la posición y compara la
+  // caída de probabilidad de victoria de la jugada elegida frente a ella.
+  function gmSubmitTrainMove(from, to, promotion){
+    const item = gmTrainQueue[gmTrainIdx];
+    const fenBefore = gmTrainGame.fen();
+    const moveObj = gmTrainGame.move({from, to, promotion: promotion || 'q'});
+    if(!moveObj) return;
+
+    const depth = 3;
+    const root = cachedSearchRoot(fenBefore, depth);
+    const bestForMover = orient(root.score, item.color);
+    const playedScore = (moveObj.san in root.scores)
+      ? root.scores[moveObj.san]
+      : cachedEngineEval(gmTrainGame.fen(), depth-1);
+    const playedForMover = orient(playedScore, item.color);
+    const winDrop = Math.max(0, winPercent(bestForMover*100) - winPercent(playedForMover*100));
+    const isBest = root.move && moveObj.san === root.move.san;
+    const isCorrect = isBest || winDrop < 5; // tolerancia: prácticamente tan buena como la mejor
+
+    const stats = gmGetTrainStats();
+    stats.trained++;
+    if(isCorrect) stats.correct++;
+    gmSaveTrainStats(stats);
+
+    gmTrainAwaitingNext = true;
+    gmTrainSelected = null;
+    gmRenderTrainBoard();
+
+    const feedback = document.getElementById('gmTrainFeedback');
+    if(feedback){
+      if(isCorrect){
+        feedback.className = 'gm-train-feedback ok';
+        feedback.innerHTML = `✅ <b>¡Correcto!</b> ${moveObj.san} es la mejor jugada (o prácticamente igual de buena) en esta posición.`;
+      } else {
+        const bestSan = root.move ? root.move.san : '—';
+        feedback.className = 'gm-train-feedback err';
+        feedback.innerHTML = `❌ <b>No era la mejor.</b> Jugaste ${moveObj.san}, pero la jugada correcta era <b>${bestSan}</b>. `
+          + `Perdiste ${winDrop.toFixed(1)}% de probabilidad de ganar frente a la mejor jugada.`;
+      }
+    }
+    const nextBtn = document.getElementById('gmTrainNextBtn');
+    if(nextBtn) nextBtn.hidden = false;
+    // Si falló, ofrece reintentar la MISMA posición desde cero (sin gastar
+    // una posición nueva) además de la opción de pasar a la siguiente.
+    const retryBtn = document.getElementById('gmTrainRetryBtn');
+    if(retryBtn) retryBtn.hidden = isCorrect;
+    gmUpdateTrainProgress();
+  }
+
+  // Vuelve a cargar la posición actual desde cero (el usuario falló y quiere
+  // intentarlo de nuevo en vez de pasar a la siguiente).
+  function gmTrainRetry(){
+    gmLoadTrainPosition();
+  }
+
+  function gmTrainNext(){
+    if(gmTrainIdx < gmTrainQueue.length - 1){
+      gmTrainIdx++;
+      gmLoadTrainPosition();
+    } else {
+      const feedback = document.getElementById('gmTrainFeedback');
+      if(feedback){
+        feedback.className = 'gm-train-feedback ok';
+        feedback.innerHTML = '🎉 ¡Completaste todas tus posiciones guardadas! Sigue analizando partidas para entrenar más errores.';
+      }
+      const nextBtn = document.getElementById('gmTrainNextBtn');
+      if(nextBtn) nextBtn.hidden = true;
+      const retryBtn = document.getElementById('gmTrainRetryBtn');
+      if(retryBtn) retryBtn.hidden = true;
+      gmTrainAwaitingNext = true;
+    }
+  }
+
+  function gmOpenTraining(){
+    const bank = gmGetErrorBank();
+    if(bank.length === 0){
+      alert('Todavía no tienes errores guardados. Analiza una partida primero para que el sistema detecte tus fallos y pifias.');
+      return;
+    }
+    // Orden aleatorio: no siempre entrenar en el mismo orden.
+    gmTrainQueue = bank.slice().sort(()=>Math.random()-0.5);
+    gmTrainIdx = 0;
+    gmOpenModal(document.getElementById('gmTrainOverlay'));
+    gmLoadTrainPosition();
+  }
+
+  function gmSetupTrainingUI(){
+    if(gmSetupTrainingUI._done) return; // evita registrar los listeners dos veces
+    gmSetupTrainingUI._done = true;
+
+    const trainBtn = document.getElementById('btnTrainMistakes');
+    const overlay = document.getElementById('gmTrainOverlay');
+    const closeBtn = document.getElementById('gmTrainCloseBtn');
+    const nextBtn = document.getElementById('gmTrainNextBtn');
+    const retryBtn = document.getElementById('gmTrainRetryBtn');
+    if(!trainBtn || !overlay || !closeBtn) return;
+
+    trainBtn.addEventListener('click', gmOpenTraining);
+    closeBtn.addEventListener('click', ()=> gmCloseModal(overlay));
+    overlay.addEventListener('click', (e)=>{ if(e.target===overlay) gmCloseModal(overlay); });
+    document.addEventListener('keydown', (e)=>{
+      if(e.key==='Escape' && overlay.classList.contains('gm-open')) gmCloseModal(overlay);
+    });
+    if(nextBtn) nextBtn.addEventListener('click', gmTrainNext);
+    if(retryBtn) retryBtn.addEventListener('click', gmTrainRetry);
+  }
+  document.addEventListener('DOMContentLoaded', gmSetupTrainingUI);
+  if(document.readyState === 'interactive' || document.readyState === 'complete'){
+    gmSetupTrainingUI();
+  }
+
 
   /* ---------------- Motor propio (tablero 0x88) ----------------
      chess.js es excelente para la interfaz, pero generar jugadas con él cuesta
@@ -1416,6 +2648,10 @@
     const entry = {san:moveObj.san, color:moveObj.color, move:moveObj, fenBefore, fenAfter, class:cls};
     history.push(entry);
     viewIndex = history.length;
+    // También al jugar a mano (no solo al cargar una PGN completa): si esta
+    // jugada fue un error o una pifia, queda disponible de inmediato para
+    // "Entrenar mis errores", sin depender de que después pidas el informe.
+    if(cls.label==='error' || cls.label==='pifia') gmSaveMistakesToTraining([entry]);
     return entry;
   }
 
@@ -1468,6 +2704,12 @@
         ? `Partida cargada: ${loaded} jugadas analizadas.`
         : `Se cargaron ${loaded} de ${total} jugadas; el resto no se pudo interpretar (notación no reconocida).`;
     }
+    // Al terminar el análisis de una partida completa (mínimo 2 jugadas), mostrar
+    // el Informe Completo de Partida automáticamente.
+    if(loaded >= 2){
+      gmBuildGameReport();
+      gmSaveMistakesToTraining(history);
+    }
     return loaded;
   }
 
@@ -1482,6 +2724,12 @@
     const sanList = temp.history();
     if(sanList.length===0){
       if(statusEl) statusEl.textContent = 'No se pudo leer esa PGN (formato no reconocido).';
+      return false;
+    }
+    // Punto exacto donde "el motor empieza a procesar" una partida completa:
+    // aquí es donde se cuenta el uso freemium (nunca por mover piezas sueltas).
+    if(!gmTryStartAnalysis()){
+      if(statusEl) statusEl.textContent = 'Límite de análisis gratuitos alcanzado.';
       return false;
     }
     if(statusEl) statusEl.textContent = `Analizando jugada 1 de ${sanList.length}...`;
@@ -1718,5 +2966,159 @@
   renderAll();
 })();
 </script>
+<!-- ================================================================
+     Cuentas de usuario + Freemium/Pricing (Gran Maestro de Bolsillo)
+     ================================================================ -->
+
+<!-- Barra flotante de sesión, esquina superior derecha -->
+<div id="authButton" class="gm-auth-bar">
+  <button id="gmLoginBtn" class="gm-auth-btn" type="button">Iniciar sesión</button>
+  <div id="gmUserBox" class="gm-user-box" hidden>
+    <span id="gmUserName" class="gm-user-name"></span>
+    <span id="gmUserBadge" class="gm-user-badge" hidden>PREMIUM</span>
+    <button id="gmPremiumMenuBtn" class="gm-auth-btn-ghost" type="button">Hazte Premium</button>
+    <button id="gmLogoutBtn" class="gm-auth-btn-ghost" type="button">Cerrar sesión</button>
+  </div>
+</div>
+
+<!-- Modal de Login / Registro -->
+<div id="authModal" class="gm-modal-overlay">
+  <div class="gm-modal gm-auth-modal" role="dialog" aria-modal="true" aria-labelledby="gmAuthTitle">
+    <button class="gm-modal-close" id="gmAuthCloseBtn" type="button" aria-label="Cerrar">×</button>
+    <h2 id="gmAuthTitle" class="gm-modal-title">Tu cuenta</h2>
+    <div class="gm-tabs">
+      <button class="gm-tab active" type="button" data-authtab="login">Iniciar Sesión</button>
+      <button class="gm-tab" type="button" data-authtab="register">Registrarse</button>
+    </div>
+
+    <form id="gmLoginForm" class="gm-auth-form">
+      <label>Email
+        <input type="email" id="loginEmail" required autocomplete="email">
+      </label>
+      <label>Contraseña
+        <input type="password" id="loginPassword" required autocomplete="current-password">
+      </label>
+      <button type="submit" class="gm-btn-primary">Iniciar Sesión</button>
+    </form>
+
+    <form id="gmRegisterForm" class="gm-auth-form" hidden>
+      <label>Nombre de usuario
+        <input type="text" id="registerName" required autocomplete="name">
+      </label>
+      <label>Email
+        <input type="email" id="registerEmail" required autocomplete="email">
+      </label>
+      <label>Contraseña
+        <input type="password" id="registerPassword" required autocomplete="new-password">
+      </label>
+      <button type="submit" class="gm-btn-primary">Registrarse</button>
+    </form>
+
+    <div id="gmAuthMsg" class="gm-form-msg"></div>
+  </div>
+</div>
+
+<!-- Modal de Precios / Paywall -->
+<div id="pricingModal" class="gm-modal-overlay">
+  <div class="gm-modal gm-pricing-modal" role="dialog" aria-modal="true" aria-labelledby="gmPricingTitle">
+    <button class="gm-modal-close" id="gmPricingCloseBtn" type="button" aria-label="Cerrar">×</button>
+    <h2 id="gmPricingTitle">Desbloquea tu máximo potencial en el ajedrez</h2>
+    <div class="gm-plans">
+      <div class="gm-plan">
+        <h3>Plan Gratuito</h3>
+        <p class="gm-plan-price">$0</p>
+        <ul>
+          <li>3 partidas analizadas</li>
+          <li>Acceso básico al motor</li>
+        </ul>
+      </div>
+      <div class="gm-plan gm-plan-featured">
+        <span class="gm-plan-tag">Recomendado</span>
+        <h3>Plan Gran Maestro</h3>
+        <p class="gm-plan-price">$5 <span>USD / mes</span></p>
+        <ul>
+          <li>Análisis ilimitado</li>
+          <li>Historial de partidas guardado</li>
+          <li>Estadísticas avanzadas</li>
+          <li>Sin interrupciones</li>
+        </ul>
+        <a href="#" id="gmSubscribeBtn" class="gm-btn-primary">Suscribirme ahora por $5/mes</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================
+     Informe Completo de Partida
+     ================================================================ -->
+<div id="gmReportOverlay" class="gm-modal-overlay">
+  <div class="gm-modal gm-report-modal" role="dialog" aria-modal="true" aria-labelledby="gmReportTitle">
+    <button class="gm-modal-close" id="gmReportCloseBtn" type="button" aria-label="Cerrar">×</button>
+    <h2 id="gmReportTitle" class="gm-modal-title">📋 Informe Completo de Partida</h2>
+
+    <div class="gm-report-section">
+      <h3>📊 Resumen general</h3>
+      <div class="gm-report-accuracy-row">
+        <div class="gm-acc-card white">
+          <div class="gm-acc-label">♙ Precisión de blancas</div>
+          <div class="gm-acc-value" id="gmRepAccWhite">—</div>
+        </div>
+        <div class="gm-acc-card black">
+          <div class="gm-acc-label">♟ Precisión de negras</div>
+          <div class="gm-acc-value" id="gmRepAccBlack">—</div>
+        </div>
+      </div>
+      <div class="gm-cat-grid" id="gmRepCatGrid"></div>
+    </div>
+
+    <div class="gm-report-section">
+      <h3>📖 Apertura detectada</h3>
+      <p class="gm-opening-name" id="gmRepOpeningName">—</p>
+      <div class="gm-opening-moves" id="gmRepOpeningMoves">—</div>
+    </div>
+
+    <div class="gm-report-section">
+      <h3>🔥 Momento crítico de la partida</h3>
+      <div class="gm-critical-box" id="gmRepCritical">—</div>
+    </div>
+
+    <div class="gm-report-section">
+      <h3>📈 Gráfico de evaluación</h3>
+      <div class="gm-chart-wrap">
+        <canvas id="gmEvalChartCanvas"></canvas>
+        <div class="gm-chart-tooltip" id="gmChartTooltip"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================
+     Modo "Entrena tus errores"
+     ================================================================ -->
+<div id="gmTrainOverlay" class="gm-modal-overlay">
+  <div class="gm-modal gm-train-modal" role="dialog" aria-modal="true" aria-labelledby="gmTrainTitle">
+    <button class="gm-modal-close" id="gmTrainCloseBtn" type="button" aria-label="Cerrar">×</button>
+    <h2 id="gmTrainTitle" class="gm-train-heading">🎯 Entrena tus errores</h2>
+
+    <div class="gm-train-progress">
+      <span id="gmTrainCounter">Posición 0 de 0</span>
+      <span id="gmTrainAccuracy">0% de aciertos (0/0)</span>
+    </div>
+
+    <p class="gm-train-turn" id="gmTrainTurn">—</p>
+
+    <div class="gm-train-board-wrap">
+      <div id="gmTrainBoard" class="gm-train-board"></div>
+    </div>
+
+    <div class="gm-train-feedback" id="gmTrainFeedback"></div>
+
+    <div class="gm-train-actions">
+      <button id="gmTrainRetryBtn" class="gm-btn-secondary" type="button" hidden>🔄 Intentar de nuevo</button>
+      <button id="gmTrainNextBtn" class="gm-btn-primary" type="button" hidden>Siguiente posición ➜</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
